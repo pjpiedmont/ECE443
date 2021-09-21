@@ -27,25 +27,19 @@
 /* Standard demo includes. */
 #include <plib.h>
 
+#include "LCDlib.h"
+#include "eeprom.h"
+
 /*-----------------------------------------------------------*/
 
 // configure hardware to run this program
 static void prvSetupHardware( void );
+void PMP_init(void);
 
-// periodic task that will toggle LEDB
-static void toggleLEDB(void* pvParameters);
+// 
+static void printToLCD(void* pvParameters);
 
-// handler task that will be unblocked by an ISR
 static void toggleLEDC(void* pvParameters);
-
-// enable CN interrupt
-void cn_interrupt_initialize(void);
-
-// C portion of ISR
-void __attribute__( (interrupt(ipl1), vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
-
-// ISR uses this to unblock toggleLEDC
-xSemaphoreHandle unblockToggleLEDC;
     
 #if ( configUSE_TRACE_FACILITY == 1 )
     traceString led_state_trace;
@@ -74,143 +68,44 @@ int main( void )
         btn1_state_trace = xTraceRegisterString("BTN1 state");
         ledb_trace = xTraceRegisterString("LEDB breakpoint");
     #endif
-        
-    // create binary semaphore to unblock toggleLEDC
-    vSemaphoreCreateBinary(unblockToggleLEDC);
-    
-    if (unblockToggleLEDC != NULL)
-    {   
-        // create tasks and start scheduler
-        xTaskCreate(toggleLEDB, "Toggle LEDB", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-        xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
-        vTaskStartScheduler();
-    }
+    LCD_init();
+
+    // create tasks and start scheduler
+    xTaskCreate(printToLCD, "Print LCD", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+    xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+
+    vTaskStartScheduler();
 
     // return error if there isn't enough memory for the heap
     // or if the semaphore failed to be created
     return 1;
 }
 
-/* toggleLEDB Function Description *********************************************
- * SYNTAX:          static void toggleLEDB(void *pvParameters)
- * KEYWORDS:        LEDB, delay, trace, task
- * DESCRIPTION:     Toggles LEDB every millisecond. While LEDC is lit, prints a
- *                  trace message after the second time this task runs.
- * PARAMETER 1:     void pointer - unused
- * RETURN VALUE:    None (There is no returning from this function)
- * NOTES:           None
- * END DESCRIPTION ************************************************************/
-static void toggleLEDB(void* pvParameters)
+static void printToLCD(void* pvParameters)
 {
-    int ledb_on = 0;
-    int ledc_lit_count = 0;
+    char string1[] = "Does Dr J prefer PIC32 or FPGA??";
+    char string2[] = "Answer: \116\145\151\164\150\145\162\041";
     
     while (1)
     {
-        LATBINV = LEDB;
+        LCD_puts(string1);
+        vTaskDelay(5000 / portTICK_RATE_MS);
+        LCD_clear();
         
-        #if ( configUSE_TRACE_FACILITY == 1 )
-            ledb_on = PORTB & LEDB;
-            if (ledb_on)
-                vTracePrint(led_state_trace, "Toggled LEDB on");
-            else
-                vTracePrint(led_state_trace, "Toggled LEDB off");
-        #endif
-        
-        if (PORTB & LEDC)
-            ledc_lit_count++;
-        else
-            ledc_lit_count = 0;  // restart count when LEDC is not lit
-        
-        // print a trace message after the second time this task has run
-        // while LEDC is lit
-        #if ( configUSE_TRACE_FACILITY == 1 )
-            if (ledc_lit_count > 2)
-                vTracePrint(ledb_trace, "LEDC lit, toggleLEDB has run more than 2 times");
-        #endif
-        
-        // delay 1ms
-        vTaskDelay(1 / portTICK_RATE_MS);
+        LCD_puts(string2);
+        vTaskDelay(5000 / portTICK_RATE_MS);
+        LCD_clear();
     }
 }
 
-/* toggleLEDC Function Description *********************************************
- * SYNTAX:          static void toggleLEDC(void *pvParameters)
- * KEYWORDS:        LEDC, debounce, handler, semaphore
- * DESCRIPTION:     Debounces BTN1 and toggles LEDC. Normally blocked, but can
- *                  be unblocked by giving a semaphore.
- * PARAMETER 1:     void pointer - unused
- * RETURN VALUE:    None (There is no returning from this function)
- * NOTES:           None
- * END DESCRIPTION ************************************************************/
 static void toggleLEDC(void* pvParameters)
 {
-    // take semaphore to make sure it's cleared
-    xSemaphoreTake(unblockToggleLEDC, 0);
-    
-    unsigned int btn = 0;
-    unsigned int btn_prev = 0;
-    
-    int ledc_on = 0;
-    
     while (1)
     {
-        // attempt to take semaphore, block for as long as possible
-        xSemaphoreTake(unblockToggleLEDC, portMAX_DELAY);
-        vTaskDelay(20 / portTICK_RATE_MS);  // debounce
-        
-        btn = PORTReadBits(IOPORT_G, BTN1);
-        
-        if (btn && !btn_prev)  // if BTN1 was just pressed
-            LATBINV = LEDC;
-        
-        btn_prev = btn;
-        
-        #if ( configUSE_TRACE_FACILITY == 1 )
-            ledc_on = PORTB & LEDC;
-            if (ledc_on)
-                vTracePrint(led_state_trace, "Toggled LEDC on");
-            else
-                vTracePrint(led_state_trace, "Toggled LEDC off");
-        #endif
+        LATBINV = LEDC;
+        vTaskDelay(1 / portTICK_RATE_MS);
     }
-}
-
-/* CN_ISR_handler Function Description *****************************************
- * SYNTAX:          void CN_ISR_handler(void)
- * KEYWORDS:        ISR, CN, semaphore
- * DESCRIPTION:     Gives a semaphore that unblocks toggleLEDC. Lights LEDD
- *                  while this function is running. Forces a context switch to
- *                  toggleLEDC rather than to the task that was interrupted.
- * RETURN VALUE:    None
- * NOTES:           Invoked by an assembly wrapper defined in cn_isr_wrapper.S.
- *                  This function's name must be defined in the assembly file
- *                  using .extern.
- * END DESCRIPTION ************************************************************/
-void CN_ISR_handler(void)
-{
-    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
-    LATBSET = LEDD;
-    
-    #if ( configUSE_TRACE_FACILITY == 1 )
-        vTracePrint(led_state_trace, "LEDD toggled on");
-    #endif
-    
-    // give semaphore to unblock toggleLEDC
-    xSemaphoreGiveFromISR(unblockToggleLEDC, &xHigherPriorityTaskWoken);    
-    LATBCLR = LEDD;
-    
-    #if ( configUSE_TRACE_FACILITY == 1 )
-        vTracePrint(led_state_trace, "LEDD toggled off");
-    #endif
-    
-    // clear interrupt flag
-    PORTRead(IOPORT_G);
-    mCNClearIntFlag();
-    
-    // switch context to higher priority task (toggleLEDC)
-    portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
 /* prvSetupHardware Function Description ***************************************
@@ -230,8 +125,7 @@ static void prvSetupHardware( void )
     PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
     LATBCLR = SM_LEDS;                      /* Clear all SM LED bits */
     
-    // enable CN interrupt
-    cn_interrupt_initialize();
+    PMP_init();
     
     /* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
@@ -239,31 +133,14 @@ static void prvSetupHardware( void )
     portDISABLE_INTERRUPTS();
 }
 
-/* cn_interrupt_initialize Function Description ********************************
- * SYNTAX:          void cn_interrupt_initialize();
- * PARAMETER1:      No Parameters
- * KEYWORDS:        initialize, change notice, interrupts
- * DESCRIPTION:     Configures the change notice interrupt. This will occur when
- *                  BTN1 is pressed.
- * RETURN VALUE:    None
- * END DESCRIPTION ************************************************************/
-void cn_interrupt_initialize(void)
+void PMP_init(void)
 {
-    unsigned int dummy; // used to hold PORT read value
-    
-    // Enable CN for BTN1
-    mCNOpen(CN_ON, CN8_ENABLE, 0);
-    
-    // Set CN interrupts priority level 1 sub priority level 0
-    mCNSetIntPriority(1);       // Group priority (1 to 7)
-    mCNSetIntSubPriority(0);    // Subgroup priority (0 to 3)
-
-    // read port to clear difference
-    dummy = PORTReadBits(IOPORT_G, BTN1);
-    mCNClearIntFlag();          // Clear CN interrupt flag
-    mCNIntEnable(1);            // Enable CNinterrupts
-    
-    // Global interrupts must enabled to complete the initialization.
+    int cfg1 = PMP_ON|PMP_READ_WRITE_EN|PMP_READ_POL_HI|PMP_WRITE_POL_HI;
+    int cfg2 = PMP_DATA_BUS_8 | PMP_MODE_MASTER1 | PMP_WAIT_BEG_1 | 
+               PMP_WAIT_MID_2 | PMP_WAIT_END_1;
+    int cfg3 = PMP_PEN_0;        // only PMA0 enabled
+    int cfg4 = PMP_INT_OFF;      // no interrupts used
+    mPMPOpen(cfg1, cfg2, cfg3, cfg4);
 }
 
 /*-----------------------------------------------------------*/
@@ -304,38 +181,6 @@ void vApplicationIdleHook( void )
 	important that vApplicationIdleHook() is permitted to return to its calling
 	function, because it is the responsibility of the idle task to clean up
 	memory allocated by the kernel to any task that has since been deleted. */
-    
-    int count = 0;
-    
-    while (1)
-    {
-        count++;
-        
-        if (PORTReadBits(IOPORT_G, BTN1))
-        {
-            LATBSET = LEDA;
-            
-            #if ( configUSE_TRACE_FACILITY == 1 )
-                if (count >= 10)  // reduce frequency of messages
-                {
-                    vTracePrint(btn1_state_trace, "BTN1 down");
-                    count = 0;
-                }
-            #endif
-        }
-        else
-        {
-            LATBCLR = LEDA;
-            
-            #if ( configUSE_TRACE_FACILITY == 1 )
-                if (count >= 10)  // reduce frequency of messages
-                {
-                    vTracePrint(btn1_state_trace, "BTN1 up");
-                    count = 0;
-                }
-            #endif
-        }
-    }
 }
 /*-----------------------------------------------------------*/
 
