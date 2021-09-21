@@ -27,25 +27,35 @@
 /* Standard demo includes. */
 #include <plib.h>
 
+#include "comm.h"
 #include "LCDlib.h"
 #include "EEPROMlib.h"
 
 #define Fsck        400000
 #define BRG_VAL     ((FPB / 2 / Fsck) - 2)
-#define DATA_LEN    80
+#define DATA_LEN    16
+
+#define SLAVE_ADDRESS   0x50
 
 /*-----------------------------------------------------------*/
 
 // configure hardware to run this program
 static void prvSetupHardware( void );
 void PMP_init(void);
-void I2C2_init(void);
+
+// enable CN interrupt
+void cn_interrupt_initialize(void);
+
+// C portion of ISR
+void __attribute__( (interrupt(ipl1), vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
 
 // 
 static void printToLCD(void* pvParameters);
 static void writeToEEPROM(void* pvParameters);
 
 static void toggleLEDC(void* pvParameters);
+
+xSemaphoreHandle unblockPrintToLCD;
     
 #if ( configUSE_TRACE_FACILITY == 1 )
     traceString led_state_trace;
@@ -76,13 +86,18 @@ int main( void )
     #endif
 
     LCD_init();
+    
+    vSemaphoreCreateBinary(unblockPrintToLCD);
+    
+    if (unblockPrintToLCD != NULL)
+    {
+        // create tasks and start scheduler
+        xTaskCreate(printToLCD, "LCD Print", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(writeToEEPROM, "EEPROM Write", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
-    // create tasks and start scheduler
-    xTaskCreate(printToLCD, "LCD Print", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-    xTaskCreate(writeToEEPROM, "EEPROM Write", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-    xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-
-    vTaskStartScheduler();
+        vTaskStartScheduler();
+    }
 
     // return error if there isn't enough memory for the heap
     return 1;
@@ -90,48 +105,54 @@ int main( void )
 
 static void printToLCD(void* pvParameters)
 {
-    char string1[] = "Does Dr J prefer PIC32 or FPGA??";
-    char string2[] = "Answer: \116\145\151\164\150\145\162\041";
+    xSemaphoreTake(unblockPrintToLCD, 0);
+    
+    char message[DATA_LEN];
+    unsigned int mem_addr = 0x86;
+    
+    unsigned int btn = 0;
+    unsigned int btn_prev = 0;
+    
+    int i;
+    for (i = 0; i < DATA_LEN; i++)
+        message[i] = 0;
     
     while (1)
     {
-        LCD_puts(string1);
-        vTaskDelay(5000 / portTICK_RATE_MS);
-        LCD_clear();
+        // attempt to take semaphore, block for as long as possible
+        xSemaphoreTake(unblockPrintToLCD, portMAX_DELAY);
+        vTaskDelay(20 / portTICK_RATE_MS);  // debounce
         
-        LCD_puts(string2);
-        vTaskDelay(5000 / portTICK_RATE_MS);
-        LCD_clear();
+        btn = PORTReadBits(IOPORT_G, BTN1);
+        
+        if (btn && !btn_prev)  // if BTN1 was just pressed
+        {
+            I2CReadEEPROM(SLAVE_ADDRESS, mem_addr, message, DATA_LEN);
+
+            LCD_clear();
+            LCD_puts(message);
+        }
+        
+        btn_prev = btn;
     }
+    
+    while (1);
 }
 
 static void writeToEEPROM(void* pvParameters)
 {
-    char slave_address = 0x50;
-    char write_data[DATA_LEN], read_data[DATA_LEN];
-    int mem_addr = 0x86, equal = 1;
+    char write_data[DATA_LEN];//, read_data[DATA_LEN];
+    int mem_addr = 0x86;//, equal = 1;
     
     int i;
     for (i = 0; i < DATA_LEN; i++)
-    {
         write_data[i] = 0;
-        read_data[i] = 0;
-    }
     
-//    write_data = "Hello world!\r";
     strcpy(write_data, "Hello world!\r");
     
-    I2CWriteEEPROM(slave_address, mem_addr, write_data, DATA_LEN);
-    I2CReadEEPROM(slave_address, mem_addr, read_data, DATA_LEN);
+    I2CWriteEEPROM(SLAVE_ADDRESS, mem_addr, write_data, DATA_LEN);
     
-    for (i = 0; i < DATA_LEN; i++)
-        if (read_data[i] != write_data[i])
-            equal = 0;
-    
-    if (equal)
-        PORTSetBits(IOPORT_G, LED4);
-    else
-        PORTSetBits(IOPORT_G, LED1);
+    while (1);
 }
 
 static void toggleLEDC(void* pvParameters)
@@ -141,6 +162,42 @@ static void toggleLEDC(void* pvParameters)
         LATBINV = LEDC;
         vTaskDelay(1 / portTICK_RATE_MS);
     }
+}
+
+/* CN_ISR_handler Function Description *****************************************
+ * SYNTAX:          void CN_ISR_handler(void)
+ * KEYWORDS:        ISR, CN, semaphore
+ * DESCRIPTION:     Gives a semaphore that unblocks toggleLEDC. Lights LEDD
+ *                  while this function is running. Forces a context switch to
+ *                  toggleLEDC rather than to the task that was interrupted.
+ * RETURN VALUE:    None
+ * NOTES:           Invoked by an assembly wrapper defined in cn_isr_wrapper.S.
+ *                  This function's name must be defined in the assembly file
+ *                  using .extern.
+ * END DESCRIPTION ************************************************************/
+void CN_ISR_handler(void)
+{
+    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
+    LATBSET = LEDD;
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(led_state_trace, "LEDD toggled on");
+    #endif
+    
+    // give semaphore to unblock printToLCD
+    xSemaphoreGiveFromISR(unblockPrintToLCD, &xHigherPriorityTaskWoken);    
+    LATBCLR = LEDD;
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(led_state_trace, "LEDD toggled off");
+    #endif
+    
+    // clear interrupt flag
+    PORTRead(IOPORT_G);
+    mCNClearIntFlag();
+    
+    // switch context to higher priority task (toggleLEDC)
+    portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
 /* prvSetupHardware Function Description ***************************************
@@ -161,7 +218,10 @@ static void prvSetupHardware( void )
     LATBCLR = SM_LEDS;                      /* Clear all SM LED bits */
     
     PMP_init();
-    I2C2_init();
+    OpenI2C2(I2C_EN, BRG_VAL);
+    initialize_uart1(19200, ODD_PARITY);
+    
+    cn_interrupt_initialize();
     
     /* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
@@ -179,12 +239,31 @@ void PMP_init(void)
     mPMPOpen(cfg1, cfg2, cfg3, cfg4);
 }
 
-void I2C2_init(void)
+/* cn_interrupt_initialize Function Description ********************************
+ * SYNTAX:          void cn_interrupt_initialize();
+ * PARAMETER1:      No Parameters
+ * KEYWORDS:        initialize, change notice, interrupts
+ * DESCRIPTION:     Configures the change notice interrupt. This will occur when
+ *                  BTN1 is pressed.
+ * RETURN VALUE:    None
+ * END DESCRIPTION ************************************************************/
+void cn_interrupt_initialize(void)
 {
-//    int Fsck = 400000;
-//    int BRG_VAL = ((FPB / 2 / Fsck) - 2);
+    unsigned int dummy; // used to hold PORT read value
     
-    OpenI2C2(I2C_EN, BRG_VAL);
+    // Enable CN for BTN1
+    mCNOpen(CN_ON, CN8_ENABLE, 0);
+    
+    // Set CN interrupts priority level 1 sub priority level 0
+    mCNSetIntPriority(1);       // Group priority (1 to 7)
+    mCNSetIntSubPriority(0);    // Subgroup priority (0 to 3)
+
+    // read port to clear difference
+    dummy = PORTReadBits(IOPORT_G, BTN1);
+    mCNClearIntFlag();          // Clear CN interrupt flag
+    mCNIntEnable(1);            // Enable CNinterrupts
+    
+    // Global interrupts must enabled to complete the initialization.
 }
 
 /*-----------------------------------------------------------*/
