@@ -10,7 +10,7 @@
       <itemPath>../trcConfig.h</itemPath>
       <itemPath>../trcSnapshotConfig.h</itemPath>
       <itemPath>../LCDlib.h</itemPath>
-      <itemPath>../eeprom.h</itemPath>
+      <itemPath>../EEPROMlib.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -32,7 +32,7 @@
       <itemPath>../../../TraceRecorder/trcSnapshotRecorder.c</itemPath>
       <itemPath>../LCDlib.c</itemPath>
       <itemPath>../main.c</itemPath>
-      <itemPath>../eeprom.c</itemPath>
+      <itemPath>../EEPROMlib.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"

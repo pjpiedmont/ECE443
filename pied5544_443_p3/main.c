@@ -28,7 +28,7 @@
 #include <plib.h>
 
 #include "LCDlib.h"
-#include "eeprom.h"
+#include "EEPROMlib.h"
 
 #define Fsck        400000
 #define BRG_VAL     ((FPB / 2 / Fsck) - 2)
@@ -128,10 +128,10 @@ static void writeToEEPROM(void* pvParameters)
         if (read_data[i] != write_data[i])
             equal = 0;
     
-    LATBSET = LEDA;
-    
     if (equal)
-        LATBSET = LEDB;
+        PORTSetBits(IOPORT_G, LED4);
+    else
+        PORTSetBits(IOPORT_G, LED1);
 }
 
 static void toggleLEDC(void* pvParameters)

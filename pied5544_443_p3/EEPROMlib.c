@@ -17,12 +17,12 @@
 
 #include <plib.h>
 #include "CerebotMX7cK.h"
-#include "eeprom.h"
+#include "EEPROMlib.h"
 
 int I2CReadEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
 {
-    char ctrl_byte_w, ctrl_byte_r, addr_hi, addr_lo;
-    int i = 0, write_err = 0;
+    char ctrl_byte_w, ctrl_byte_r, addr_hi, addr_lo, temp;
+    int write_err = 0;
 
     ctrl_byte_w = ((SlaveAddress << 1) | 0);
     addr_hi = ((mem_addr >> 8) & 0xff);
@@ -38,17 +38,23 @@ int I2CReadEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
     write_err |= MasterWriteI2C2(addr_lo);
 
     RestartI2C2();
+    IdleI2C2();
 
     MasterWriteI2C2(ctrl_byte_r);   // Reverse bus direction
 
     while (data_len--)
-        data[i++] = MasterReadI2C2();
-    
-//    do
-//    {
-//        data[i++] = MasterReadI2C2();
-//    }
-//    while (data[i] != 0 && data[i] != '\r' && data[i] != '\n');
+    {
+        temp = MasterReadI2C2();
+        *data = temp;
+        
+        data++;
+        
+        if (data_len >= 1)
+        {
+            AckI2C2();
+            IdleI2C2();
+        }
+    }
 
     NotAckI2C2();
     IdleI2C2();
@@ -60,8 +66,8 @@ int I2CReadEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
 
 int I2CWriteEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
 {
-    char ctrl_byte, addr_hi, addr_lo;
-    int i = 0, write_err = 0;
+    char ctrl_byte, addr_hi, addr_lo, temp;
+    int write_err = 0;
 
     ctrl_byte = ((SlaveAddress << 1) | 0);
     addr_hi = ((mem_addr >> 8) & 0xff);
@@ -75,9 +81,11 @@ int I2CWriteEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
     write_err |= MasterWriteI2C2(addr_lo);
 
     while (data_len--)
-    //while (data[i] != 0)// && data[i] != '\r' && data[i] != '\n')
     {
-        write_err |= MasterWriteI2C2(data[i++]);
+        temp = *data;
+        write_err |= MasterWriteI2C2(temp);
+        
+        data++;
         mem_addr++;
 
         if (mem_addr % 64 == 0)
