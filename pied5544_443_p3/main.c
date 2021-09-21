@@ -28,6 +28,8 @@
 /* Standard demo includes. */
 #include <plib.h>
 
+#include "LCDlib.h"
+
 /*-----------------------------------------------------------*/
 
 /*
@@ -35,9 +37,7 @@
  */
 static void prvSetupHardware( void );
 
-/* Simple Tasks that light a specific LED when running  */
-static void prvTestTask1( void *pvParameters );
-static void prvTestTask2( void *pvParameters );
+static void printToLCD(void *pvParameters);
   
 #if ( configUSE_TRACE_FACILITY == 1 )
     traceString str;
@@ -56,88 +56,18 @@ static void prvTestTask2( void *pvParameters );
  * END DESCRIPTION *****************************************************/
 int main( void )
 {
-    prvSetupHardware();		/*  Configure hardware */
+    // configure hardware
+    prvSetupHardware();
     
     #if ( configUSE_TRACE_FACILITY == 1 )
-        vTraceEnable(TRC_START); // Initialize and start recording
+        vTraceEnable(TRC_START);  // Initialize and start recording
         str = xTraceRegisterString("Channel");
     #endif
 
-/* -----  NO FreeRTOS API calls BEFORE this line!!! ------------*/
-    
-/* Create the tasks then start the scheduler. */
-
-    /* Create the tasks defined within this file. */
-    xTaskCreate( prvTestTask1, "Tst1", configMINIMAL_STACK_SIZE,
-                                    NULL, tskIDLE_PRIORITY, NULL );
-    xTaskCreate( prvTestTask2, "Tst2", configMINIMAL_STACK_SIZE,
-                                    NULL, tskIDLE_PRIORITY, NULL );
-
-    vTaskStartScheduler();	/*  Finally start the scheduler. */
-
-/* Will only reach here if there is insufficient heap available to start
- *  the scheduler. */
-    return 0;
-}  /* End of main */
-
-/* prvTestTask1 Function Description *****************************************
- * SYNTAX:          static void prvTestTask1( void *pvParameters );
- * KEYWORDS:        RTOS, Task
- * DESCRIPTION:     If LEDA is not lit, all LEDs are turned off and LEDA is
- *                  turned on. Increments a counter each time the task is
- *                  resumed.
- * PARAMETER 1:     void pointer - data of unspecified data type sent from
- *                  RTOS scheduler
- * RETURN VALUE:    None (There is no returning from this function)
- * NOTES:           LEDA is switched on and LEDB switched off if LEDA was
- *                  detected as off.
- * END DESCRIPTION ************************************************************/
-static void prvTestTask1( void *pvParameters )
-{
-unsigned int counter = 0;
-
-    for( ;; )
-    {
-	if(!(LATB & LEDA))      /* Test for LEDA off */
-	{
-            LATBCLR = SM_LEDS;  /* Turn off all other LEDs */
-            LATBSET = LEDA;     /* Turn LEDA on */
-            #if ( configUSE_TRACE_FACILITY == 1 )
-                vTracePrint(str, "LEDA set on");
-            #endif
-            ++counter;          /* Increment task run counter */
-	}
-    }
-}  /* End of prvTestTask1 */
-
-/* prvTestTask2 Function Description *****************************************
- * SYNTAX:          static void prvTestTask2( void *pvParameters );
- * KEYWORDS:        RTOS, Task
- * DESCRIPTION:     If LEDB is not lit, all LEDs are turned off and LEDB is
- *                  turned on. Increments a counter each time the task is
- *                  resumed.
- * PARAMETER 1:     void pointer - data of unspecified data type sent from
- *                  RTOS scheduler
- * RETURN VALUE:    None (There is no returning from this function)
- * NOTES:           LEDB is switched on and LEDA switched off if LEDB was
- *                  detected as off.
- * END DESCRIPTION ************************************************************/
-static void prvTestTask2( void *pvParameters )
-{
-unsigned int counter = 0;
-    for( ;; )
-    {
-	if(!(LATB & LEDB))      /* Test for LEDB off */
-	{
-            LATBCLR = SM_LEDS;  /* Turn off all other LEDs */
-            LATBSET = LEDB;     /* Turn LEDB on */
-            #if ( configUSE_TRACE_FACILITY == 1 )
-                vTracePrint(str, "LEDB set on");
-            #endif
-            ++counter;          /* Increment task run counter */
-	}
-    }
-}  /* End of prvTestTask2 */
+    /* -----  NO FreeRTOS API calls BEFORE this line!!! ------------*/
+        
+    return 1;
+}
 
 static void prvSetupHardware( void )
 {
