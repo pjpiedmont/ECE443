@@ -43,6 +43,12 @@ int I2CReadEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
 
     while (data_len--)
         data[i++] = MasterReadI2C2();
+    
+//    do
+//    {
+//        data[i++] = MasterReadI2C2();
+//    }
+//    while (data[i] != 0 && data[i] != '\r' && data[i] != '\n');
 
     NotAckI2C2();
     IdleI2C2();
@@ -69,6 +75,7 @@ int I2CWriteEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len)
     write_err |= MasterWriteI2C2(addr_lo);
 
     while (data_len--)
+    //while (data[i] != 0)// && data[i] != '\r' && data[i] != '\n')
     {
         write_err |= MasterWriteI2C2(data[i++]);
         mem_addr++;

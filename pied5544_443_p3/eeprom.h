@@ -18,10 +18,6 @@
 #ifndef _EXAMPLE_FILE_NAME_H    /* Guard against multiple inclusion */
 #define _EXAMPLE_FILE_NAME_H
 
-#define Fsck        400000
-#define BRG_VAL     ((FPB / 2 / Fsck) - 2)
-#define DATA_LEN    64
-
 int I2CReadEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len);
 int I2CWriteEEPROM(char SlaveAddress, int mem_addr, char* data, int data_len);
 int wait_i2c_xfer(int SlaveAddress);

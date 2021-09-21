@@ -30,14 +30,20 @@
 #include "LCDlib.h"
 #include "eeprom.h"
 
+#define Fsck        400000
+#define BRG_VAL     ((FPB / 2 / Fsck) - 2)
+#define DATA_LEN    80
+
 /*-----------------------------------------------------------*/
 
 // configure hardware to run this program
 static void prvSetupHardware( void );
 void PMP_init(void);
+void I2C2_init(void);
 
 // 
 static void printToLCD(void* pvParameters);
+static void writeToEEPROM(void* pvParameters);
 
 static void toggleLEDC(void* pvParameters);
     
@@ -72,13 +78,13 @@ int main( void )
     LCD_init();
 
     // create tasks and start scheduler
-    xTaskCreate(printToLCD, "Print LCD", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+    xTaskCreate(printToLCD, "LCD Print", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+    xTaskCreate(writeToEEPROM, "EEPROM Write", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
     xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
     vTaskStartScheduler();
 
     // return error if there isn't enough memory for the heap
-    // or if the semaphore failed to be created
     return 1;
 }
 
@@ -97,6 +103,35 @@ static void printToLCD(void* pvParameters)
         vTaskDelay(5000 / portTICK_RATE_MS);
         LCD_clear();
     }
+}
+
+static void writeToEEPROM(void* pvParameters)
+{
+    char slave_address = 0x50;
+    char write_data[DATA_LEN], read_data[DATA_LEN];
+    int mem_addr = 0x86, equal = 1;
+    
+    int i;
+    for (i = 0; i < DATA_LEN; i++)
+    {
+        write_data[i] = 0;
+        read_data[i] = 0;
+    }
+    
+//    write_data = "Hello world!\r";
+    strcpy(write_data, "Hello world!\r");
+    
+    I2CWriteEEPROM(slave_address, mem_addr, write_data, DATA_LEN);
+    I2CReadEEPROM(slave_address, mem_addr, read_data, DATA_LEN);
+    
+    for (i = 0; i < DATA_LEN; i++)
+        if (read_data[i] != write_data[i])
+            equal = 0;
+    
+    LATBSET = LEDA;
+    
+    if (equal)
+        LATBSET = LEDB;
 }
 
 static void toggleLEDC(void* pvParameters)
@@ -126,6 +161,7 @@ static void prvSetupHardware( void )
     LATBCLR = SM_LEDS;                      /* Clear all SM LED bits */
     
     PMP_init();
+    I2C2_init();
     
     /* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
@@ -141,6 +177,14 @@ void PMP_init(void)
     int cfg3 = PMP_PEN_0;        // only PMA0 enabled
     int cfg4 = PMP_INT_OFF;      // no interrupts used
     mPMPOpen(cfg1, cfg2, cfg3, cfg4);
+}
+
+void I2C2_init(void)
+{
+//    int Fsck = 400000;
+//    int BRG_VAL = ((FPB / 2 / Fsck) - 2);
+    
+    OpenI2C2(I2C_EN, BRG_VAL);
 }
 
 /*-----------------------------------------------------------*/
