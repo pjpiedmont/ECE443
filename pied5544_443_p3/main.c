@@ -153,9 +153,11 @@ static void printToLCD(void* pvParameters)
         // attempt to take semaphore, block for as long as possible
         xSemaphoreTake(unblockPrintToLCD, portMAX_DELAY);
         
-        // debounce
+        // wait for press and debounce
+        while(!PORTReadBits(IOPORT_G, BTN1));
         vTaskDelay(20 / portTICK_RATE_MS);
         
+        // wait for release and debounce
         while(PORTReadBits(IOPORT_G, BTN1));
         vTaskDelay(20 / portTICK_RATE_MS);
         
@@ -163,61 +165,40 @@ static void printToLCD(void* pvParameters)
         PORTRead(IOPORT_G);
         mCNClearIntFlag();
         
-//        btn = PORTReadBits(IOPORT_G, BTN1);
-        
         // re-enable interrupt
         mCNIntEnable(1);
         
-//        if (btn && !btn_prev)  // if BTN1 was just pressed
-//        {
-            if (eeprom_free_space < EEPROM_MAX_MSGS)  // if EEPROM is not empty
+        // print if a message is available to print
+        if (eeprom_free_space < EEPROM_MAX_MSGS)  // if EEPROM is not empty
+        {
+            LATBCLR = LEDA;
+            I2CReadEEPROM(SLAVE_ADDRESS, EEPROM_BASE_ADDR + (EEPROM_OFFSET * eeprom_index_r), message, DATA_LEN+1);
+            LATBSET = LEDA;
+
+            eeprom_index_r++;
+            eeprom_index_r %= EEPROM_MAX_MSGS;
+
+            eeprom_free_space++;
+
+            i = 0;
+            while (1)
             {
-                LATBCLR = LEDA;
-                I2CReadEEPROM(SLAVE_ADDRESS, EEPROM_BASE_ADDR + (EEPROM_OFFSET * eeprom_index_r), message, DATA_LEN+1);
-                LATBSET = LEDA;
-                
-                eeprom_index_r++;
-                eeprom_index_r %= EEPROM_MAX_MSGS;
-                
-                eeprom_free_space++;
-                
-                i = 0;
-                while (1)
+                while (message[i] != 0 && line_count < 17)
                 {
-                    while (message[i] != 0 && line_count < 17)
-                    {
-                        if (message[i] == ' ')
-                            end = i;
-
-                        i++;
-                        line_count++;
-                    }
-
-                    if (message[i] == 0)
+                    if (message[i] == ' ')
                         end = i;
 
-                    strncpy(LCD_line2, message+start, end-start);
-
-                    strncpy(LCD_str+0, LCD_line1, 16);
-                    strncpy(LCD_str+16, LCD_line2, 16);
-
-                    LCD_clear();
-                    LCD_puts(LCD_str);
-
-                    strncpy(LCD_line1, LCD_line2, 16);
-                    strncpy(LCD_line2, "                ", 16);
-
-                    if (message[i] == 0)
-                        break;
-
-                    i = end + 1;
-                    start = end + 1;
-                    line_count = 0;
-
-                    vTaskDelay(1000 / portTICK_RATE_MS);
+                    i++;
+                    line_count++;
                 }
 
-                vTaskDelay(1000 / portTICK_RATE_MS);
+                if (message[i] == 0)
+                    end = i;
+                
+                if (end <= i-16)
+                    end = i - 1;
+
+                strncpy(LCD_line2, message+start, end-start);
 
                 strncpy(LCD_str+0, LCD_line1, 16);
                 strncpy(LCD_str+16, LCD_line2, 16);
@@ -225,21 +206,40 @@ static void printToLCD(void* pvParameters)
                 LCD_clear();
                 LCD_puts(LCD_str);
 
-                vTaskDelay(1000 / portTICK_RATE_MS);
-                LCD_clear();
-
-                strncpy(LCD_line1, "                ", 16);
+                strncpy(LCD_line1, LCD_line2, 16);
                 strncpy(LCD_line2, "                ", 16);
+
+                if (message[i] == 0)
+                    break;
                 
+                i = end;
+                start = end;
+                
+                line_count = 0;
+
                 vTaskDelay(1000 / portTICK_RATE_MS);
             }
-            else
-            {
-                putsU1("No more messages to display - EEPROM is empty");
-            }
-//        }
-        
-//        btn_prev = btn;
+
+            vTaskDelay(1000 / portTICK_RATE_MS);
+
+            strncpy(LCD_str+0, LCD_line1, 16);
+            strncpy(LCD_str+16, LCD_line2, 16);
+
+            LCD_clear();
+            LCD_puts(LCD_str);
+
+            vTaskDelay(1000 / portTICK_RATE_MS);
+            LCD_clear();
+
+            strncpy(LCD_line1, "                ", 16);
+            strncpy(LCD_line2, "                ", 16);
+
+            vTaskDelay(1000 / portTICK_RATE_MS);
+        }
+        else
+        {
+            putsU1("No more messages to display - EEPROM is empty");
+        }
     }
 }
 
@@ -269,11 +269,10 @@ static void writeToEEPROM(void* pvParameters)
                     message[msg_index] = rx;
                     msg_index++;
                 }
-            }
-            
-            if (rx == '\r')
-            {
-                terminated = 1;
+                else
+                {
+                    terminated = 1;
+                }
             }
         }
         
@@ -299,8 +298,6 @@ static void writeToEEPROM(void* pvParameters)
         msg_index = 0;
         terminated = 0;
         rx = 0;
-        
-//        taskYIELD();
     }
 }
 
