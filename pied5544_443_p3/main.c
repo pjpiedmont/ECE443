@@ -31,6 +31,8 @@
 #include "LCDlib.h"
 #include "EEPROMlib.h"
 
+/*-----------------------------------------------------------*/
+
 #define Fsck        400000
 #define BRG_VAL     ((FPB / 2 / Fsck) - 2)
 #define DATA_LEN    80
@@ -72,9 +74,11 @@ int eeprom_free_space;
 /*-----------------------------------------------------------*/
     
 #if ( configUSE_TRACE_FACILITY == 1 )
-    traceString led_state_trace;
-    traceString btn1_state_trace;
-    traceString ledb_trace;
+    traceString cn_isr_trace;
+    traceString uart_isr_trace;
+    traceString int_trace;
+    traceString eeprom_trace;
+    traceString lcd_trace;
 #endif
 
 /* main Function Description ***************************************
@@ -94,9 +98,11 @@ int main( void )
     // initialize tracealyzer and start recording
     #if ( configUSE_TRACE_FACILITY == 1 )
         vTraceEnable(TRC_START);
-        led_state_trace = xTraceRegisterString("LED state");
-        btn1_state_trace = xTraceRegisterString("BTN1 state");
-        ledb_trace = xTraceRegisterString("LEDB breakpoint");
+        cn_isr_trace = xTraceRegisterString("CN ISR");
+        uart_isr_trace = xTraceRegisterString("UART RX ISR");
+        int_trace = xTraceRegisterString("Interrupts");
+        eeprom_trace = xTraceRegisterString("EEPROM");
+        lcd_trace = xTraceRegisterString("LCD");
     #endif
 
     eeprom_free_space = EEPROM_MAX_MSGS;
@@ -165,15 +171,31 @@ static void printToLCD(void* pvParameters)
         PORTRead(IOPORT_G);
         mCNClearIntFlag();
         
+        #if ( configUSE_TRACE_FACILITY == 1 )
+            vTracePrint(int_trace, "Cleared CN int flag");
+        #endif
+        
         // re-enable interrupt
         mCNIntEnable(1);
+        
+        #if ( configUSE_TRACE_FACILITY == 1 )
+            vTracePrint(int_trace, "Re-enabled CN interrupt");
+        #endif
         
         // print if a message is available to print
         if (eeprom_free_space < EEPROM_MAX_MSGS)  // if EEPROM is not empty
         {
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(eeprom_trace, "EEPROM not empty");
+            #endif
+
             LATBCLR = LEDA;
             I2CReadEEPROM(SLAVE_ADDRESS, EEPROM_BASE_ADDR + (EEPROM_OFFSET * eeprom_index_r), message, DATA_LEN+1);
             LATBSET = LEDA;
+            
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(eeprom_trace, "Read from EEPROM");
+            #endif
 
             eeprom_index_r++;
             eeprom_index_r %= EEPROM_MAX_MSGS;
@@ -205,6 +227,10 @@ static void printToLCD(void* pvParameters)
 
                 LCD_clear();
                 LCD_puts(LCD_str);
+                
+                #if ( configUSE_TRACE_FACILITY == 1 )
+                    vTracePrint(lcd_trace, "Wrote to LCD");
+                #endif
 
                 strncpy(LCD_line1, LCD_line2, 16);
                 strncpy(LCD_line2, "                ", 16);
@@ -227,9 +253,17 @@ static void printToLCD(void* pvParameters)
 
             LCD_clear();
             LCD_puts(LCD_str);
+            
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(lcd_trace, "Wrote to LCD");
+            #endif
 
             vTaskDelay(1000 / portTICK_RATE_MS);
             LCD_clear();
+            
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(lcd_trace, "Cleared LCD");
+            #endif
 
             strncpy(LCD_line1, "                ", 16);
             strncpy(LCD_line2, "                ", 16);
@@ -239,6 +273,10 @@ static void printToLCD(void* pvParameters)
         else
         {
             putsU1("No more messages to display - EEPROM is empty");
+            
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(eeprom_trace, "EEPROM empty");
+            #endif
         }
     }
 }
@@ -278,9 +316,17 @@ static void writeToEEPROM(void* pvParameters)
         
         if (eeprom_free_space > 0)
         {
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(eeprom_trace, "EEPROM not full");
+            #endif
+
             LATBCLR = LEDA;
             I2CWriteEEPROM(SLAVE_ADDRESS, EEPROM_BASE_ADDR + (EEPROM_OFFSET * eeprom_index_w), message, DATA_LEN+1);
             LATBSET = LEDA;
+            
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(eeprom_trace, "Wrote to EEPROM");
+            #endif
             
             eeprom_index_w++;
             eeprom_index_w %= EEPROM_MAX_MSGS;
@@ -290,6 +336,10 @@ static void writeToEEPROM(void* pvParameters)
         else
         {
             putsU1("Cannot save new message - EEPROM is full");
+            
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(eeprom_trace, "EEPROM full");
+            #endif
         }
         
         for (i = 0; i < DATA_LEN+1; i++)
@@ -339,20 +389,31 @@ static void isEEPROMFull(void* pvParameters)
  * END DESCRIPTION ************************************************************/
 void CN_ISR_handler(void)
 {
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(cn_isr_trace, "Entered C portion");
+    #endif
+
+    // disable interrupt - will be re-enabled by printToLCD
     mCNIntEnable(0);
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(int_trace, "Disabled CN interrupt");
+    #endif
+
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     LATBSET = LEDD;
     
-    #if ( configUSE_TRACE_FACILITY == 1 )
-        vTracePrint(led_state_trace, "LEDD toggled on");
-    #endif
-    
     // give semaphore to unblock printToLCD
-    xSemaphoreGiveFromISR(unblockPrintToLCD, &xHigherPriorityTaskWoken);    
+    xSemaphoreGiveFromISR(unblockPrintToLCD, &xHigherPriorityTaskWoken);
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(cn_isr_trace, "Gave semaphore");
+    #endif
+
     LATBCLR = LEDD;
     
     #if ( configUSE_TRACE_FACILITY == 1 )
-        vTracePrint(led_state_trace, "LEDD toggled off");
+        vTracePrint(cn_isr_trace, "Exiting");
     #endif
     
     // switch context to higher priority task (toggleLEDC)
@@ -361,6 +422,10 @@ void CN_ISR_handler(void)
 
 void U1RX_ISR_handler(void)
 {
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(uart_isr_trace, "Entered C portion");
+    #endif
+
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     
     char rx;
@@ -376,9 +441,25 @@ void U1RX_ISR_handler(void)
         putcU1(rx);
     }
     
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(uart_isr_trace, "Echoed to terminal");
+    #endif
+    
     xQueueSendToBackFromISR(UartRxQueue, &rx, &xHigherPriorityTaskWoken);
     
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(uart_isr_trace, "Sent char to queue");
+    #endif
+    
     mU1AClearAllIntFlags();
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(int_trace, "Cleared UART int flags");
+    #endif
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(uart_isr_trace, "Exiting");
+    #endif
     
     // switch context to higher priority task (toggleLEDC)
     portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
