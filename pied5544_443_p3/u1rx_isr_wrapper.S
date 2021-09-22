@@ -1,17 +1,17 @@
-/** @file cn_isr_wrapper.S
+/** @file u1rx_isr_wrapper.S
  * 
  * @brief
- * Assembly wrapper for transitioning to the CN interrupt handler 
+ * Assembly wrapper for transitioning to the UART1 RX interrupt handler 
  *
  * @details       
- * Invoked when the CN interrupt occurs. Saves the processor context, jumps to
- * the location of the CN_ISR_handler function in main.c, and restores the
- * processor context.
+ * Invoked when the UART1 RX interrupt occurs. Saves the processor context,
+ * jumps to the location of the U1RX_ISR_handler function in main.c, and
+ * restores the processor context.
  *
  * @author
  * Parker Piedmont
  * @date
- * 13 Sep 2021
+ * 21 Sep 2021
  */
 
 /* These header files are part of the compiler distribution. */
