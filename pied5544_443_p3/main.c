@@ -33,7 +33,7 @@
 
 #define Fsck        400000
 #define BRG_VAL     ((FPB / 2 / Fsck) - 2)
-#define DATA_LEN    31
+#define DATA_LEN    80
 
 #define SLAVE_ADDRESS   0x50
 
@@ -131,9 +131,9 @@ static void printToLCD(void* pvParameters)
     unsigned int btn = 0;
     unsigned int btn_prev = 0;
     
-    char LCD_line1[16] = "Hello           ";
-    char LCD_line2[16] = "world!          ";
-    char LCD_str[32] = "";
+    char LCD_line1[16] = "                ";
+    char LCD_line2[16] = "                ";
+    char LCD_str[33];
     
     int start = 0;
     int end = 0;
@@ -142,6 +142,11 @@ static void printToLCD(void* pvParameters)
     int i;
     for (i = 0; i < DATA_LEN+1; i++)
         message[i] = 0;
+    
+    for (i = 0; i < 32; i++)
+        LCD_str[i] = ' ';
+    
+    LCD_str[32] = 0;
     
     while (1)
     {
@@ -175,24 +180,38 @@ static void printToLCD(void* pvParameters)
             }
             
             i = 0;
-            while (message[i] != 0)
-            {
-                if (message[i] == ' ')
-                    end = i;
-                
-                if (line_length > 16)
-                {
-                    strncpy(LCD_line2, message+start, end-start);
-                    line_length = 0;
-                }
-                
-                i++;
-                line_length++;
-            }
+//            while (message[i] != 0)
+//            {
+//                if (message[i] == ' ')
+//                    end = i;
+//                
+//                if (line_length > 16)
+//                {
+//                    strncpy(LCD_line2, message+start, end-start);
+//                    
+//                    start = end;
+//                    i = end;
+//                    line_length = 0;
+//                }
+//                
+//                strncpy(LCD_str+0, LCD_line1, 16);
+//                strncpy(LCD_str+16, LCD_line2, 16);
+//
+//                LCD_clear();
+//                LCD_puts(LCD_str);
+//                
+//                strncpy(LCD_line1, LCD_line2, 16);
+//                strncpy(LCD_line2, "                ", 16);
+//                
+//                i++;
+//                line_length++;
+//                
+//                vTaskDelay(1000 / portTICK_RATE_MS);
+//            }
             
-//            strcat(LCD_str, LCD_line1);
-//            strcat(LCD_str, LCD_line2);
-
+//            strncpy(LCD_str+0, LCD_line1, 16);
+//            strncpy(LCD_str+16, LCD_line2, 16);
+//
             LCD_clear();
             LCD_puts(message);
         }

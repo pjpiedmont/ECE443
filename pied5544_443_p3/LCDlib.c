@@ -62,7 +62,7 @@ void LCD_putc(char c)
 
 void LCD_puts(char* char_string)
 {
-//    writeLCD(0, 0x80);
+    writeLCD(0, 0x80);
     
     while (*char_string) // Look for end of string NULL character
     {
