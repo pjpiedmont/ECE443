@@ -628,10 +628,12 @@ static void prvSetupHardware( void )
     PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
     LATBCLR = SM_LEDS;                      /* Clear all SM LED bits */
     
+	// initialize PMP, I2C2, and UART1
     PMP_init();
     OpenI2C2(I2C_EN, BRG_VAL);
     initialize_uart1(19200, ODD_PARITY);
     
+	// initialize interrupts
     cn_interrupt_initialize();
     uart_rx_interrupt_initialize();
     
