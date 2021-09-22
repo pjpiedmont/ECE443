@@ -49,6 +49,8 @@
 // I2C configs
 #define Fsck        	400000
 #define BRG_VAL     	((FPB / 2 / Fsck) - 2)
+
+// maximum UART input length
 #define MAX_MSG_LEN   	80
 
 // EEPROM configs
