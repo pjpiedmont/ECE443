@@ -33,9 +33,13 @@
 
 #define Fsck        400000
 #define BRG_VAL     ((FPB / 2 / Fsck) - 2)
-#define DATA_LEN    16
+#define DATA_LEN    31
 
 #define SLAVE_ADDRESS   0x50
+
+#define EEPROM_BASE_ADDR    0x10
+#define EEPROM_OFFSET       0x20
+#define EEPROM_MAX_MSGS     5
 
 /*-----------------------------------------------------------*/
 
@@ -55,11 +59,17 @@ void __attribute__( (interrupt(ipl1), vector(_UART_1_VECTOR))) U1RX_ISR_handler(
 // 
 static void printToLCD(void* pvParameters);
 static void writeToEEPROM(void* pvParameters);
-
 static void toggleLEDC(void* pvParameters);
+static void isEEPROMFull(void* pvParameters);
 
-xQueueHandle UARTCharQueue;
+/*-----------------------------------------------------------*/
+
+xQueueHandle UartRxQueue;
 xSemaphoreHandle unblockPrintToLCD;
+
+int eeprom_free_space;
+
+/*-----------------------------------------------------------*/
     
 #if ( configUSE_TRACE_FACILITY == 1 )
     traceString led_state_trace;
@@ -89,16 +99,19 @@ int main( void )
         ledb_trace = xTraceRegisterString("LEDB breakpoint");
     #endif
 
+    eeprom_free_space = EEPROM_MAX_MSGS;
+
     LCD_init();
     
-    xQueueCreate(DATA_LEN, sizeof(char*));
-    vSemaphoreCreateBinary(unblockPrintToLCD);
+    UartRxQueue = xQueueCreate(DATA_LEN+1, sizeof(char));
+    unblockPrintToLCD = xSemaphoreCreateBinary();
     
-    if (unblockPrintToLCD != NULL)
+    if (UartRxQueue != NULL && unblockPrintToLCD != NULL)
     {
         // create tasks and start scheduler
         xTaskCreate(printToLCD, "LCD Print", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
         xTaskCreate(writeToEEPROM, "EEPROM Write", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(isEEPROMFull, "EEPROM Status", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
         xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
         vTaskStartScheduler();
@@ -112,27 +125,73 @@ static void printToLCD(void* pvParameters)
 {
     xSemaphoreTake(unblockPrintToLCD, 0);
     
-    char message[DATA_LEN];
-    unsigned int mem_addr = 0x86;
+    char message[DATA_LEN+1];
+    int eeprom_index_r = 0;
     
     unsigned int btn = 0;
     unsigned int btn_prev = 0;
     
+    char LCD_line1[16] = "Hello           ";
+    char LCD_line2[16] = "world!          ";
+    char LCD_str[32] = "";
+    
+    int start = 0;
+    int end = 0;
+    int line_length = 0;
+    
     int i;
-    for (i = 0; i < DATA_LEN; i++)
+    for (i = 0; i < DATA_LEN+1; i++)
         message[i] = 0;
     
     while (1)
     {
         // attempt to take semaphore, block for as long as possible
         xSemaphoreTake(unblockPrintToLCD, portMAX_DELAY);
-        vTaskDelay(20 / portTICK_RATE_MS);  // debounce
+        
+        // debounce
+        vTaskDelay(20 / portTICK_RATE_MS);
+        
+        // clear CN interrupt flag after button has stopped bouncing
+        PORTRead(IOPORT_G);
+        mCNClearIntFlag();
         
         btn = PORTReadBits(IOPORT_G, BTN1);
         
+        // re-enable interrupt
+        mCNIntEnable(1);
+        
         if (btn && !btn_prev)  // if BTN1 was just pressed
         {
-            I2CReadEEPROM(SLAVE_ADDRESS, mem_addr, message, DATA_LEN);
+            if (eeprom_free_space < EEPROM_MAX_MSGS)  // if EEPROM is not empty
+            {
+                LATBCLR = LEDA;
+                I2CReadEEPROM(SLAVE_ADDRESS, EEPROM_BASE_ADDR + (EEPROM_OFFSET * eeprom_index_r), message, DATA_LEN+1);
+                LATBSET = LEDA;
+                
+                eeprom_index_r++;
+                eeprom_index_r %= EEPROM_MAX_MSGS;
+                
+                eeprom_free_space++;
+            }
+            
+            i = 0;
+            while (message[i] != 0)
+            {
+                if (message[i] == ' ')
+                    end = i;
+                
+                if (line_length > 16)
+                {
+                    strncpy(LCD_line2, message+start, end-start);
+                    line_length = 0;
+                }
+                
+                i++;
+                line_length++;
+            }
+            
+//            strcat(LCD_str, LCD_line1);
+//            strcat(LCD_str, LCD_line2);
 
             LCD_clear();
             LCD_puts(message);
@@ -140,24 +199,61 @@ static void printToLCD(void* pvParameters)
         
         btn_prev = btn;
     }
-    
-    while (1);
 }
 
 static void writeToEEPROM(void* pvParameters)
 {
-    char write_data[DATA_LEN];
-    unsigned int mem_addr = 0x86;
+    char message[DATA_LEN+1];
+    int eeprom_index_w = 0;
+    
+    char rx = 0;
+    int msg_index = 0;
+    int terminated = 0;
     
     int i;
-    for (i = 0; i < DATA_LEN; i++)
-        write_data[i] = 0;
+    for (i = 0; i < DATA_LEN+1; i++)
+        message[i] = 0;
     
-    strcpy(write_data, "Hello world!\r");
-    
-    I2CWriteEEPROM(SLAVE_ADDRESS, mem_addr, write_data, DATA_LEN);
-    
-    while (1);
+    while (1)
+    {
+        while (!terminated)
+        {
+            if (uxQueueMessagesWaiting(UartRxQueue) > 0)
+            {
+                xQueueReceive(UartRxQueue, &rx, 0);
+                
+                if (rx != '\r')
+                {
+                    message[msg_index] = rx;
+                    msg_index++;
+                }
+            }
+            
+            if (rx == '\r')
+            {
+                terminated = 1;
+            }
+        }
+        
+        if (eeprom_free_space > 0)
+        {
+            LATBCLR = LEDA;
+            I2CWriteEEPROM(SLAVE_ADDRESS, EEPROM_BASE_ADDR + (EEPROM_OFFSET * eeprom_index_w), message, DATA_LEN+1);
+            LATBSET = LEDA;
+            
+            eeprom_index_w++;
+            eeprom_index_w %= EEPROM_MAX_MSGS;
+            
+            eeprom_free_space--;
+        }            
+        
+        for (i = 0; i < DATA_LEN+1; i++)
+            message[i] = 0;
+        
+        msg_index = 0;
+        terminated = 0;
+        rx = 0;
+    }
 }
 
 static void toggleLEDC(void* pvParameters)
@@ -166,6 +262,22 @@ static void toggleLEDC(void* pvParameters)
     {
         LATBINV = LEDC;
         vTaskDelay(1 / portTICK_RATE_MS);
+    }
+}
+
+static void isEEPROMFull(void* pvParameters)
+{
+    while(1)
+    {
+        if (eeprom_free_space > 0)  // if EEPROM is not full
+            LATBSET = LEDA;
+        else
+            LATBCLR = LEDA;
+        
+        if (eeprom_free_space == EEPROM_MAX_MSGS)  // if EEPROM is empty
+            LATBSET = LEDB;
+        else
+            LATBCLR = LEDB;
     }
 }
 
@@ -182,6 +294,7 @@ static void toggleLEDC(void* pvParameters)
  * END DESCRIPTION ************************************************************/
 void CN_ISR_handler(void)
 {
+    mCNIntEnable(0);
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     LATBSET = LEDD;
     
@@ -197,10 +310,6 @@ void CN_ISR_handler(void)
         vTracePrint(led_state_trace, "LEDD toggled off");
     #endif
     
-    // clear interrupt flag
-    PORTRead(IOPORT_G);
-    mCNClearIntFlag();
-    
     // switch context to higher priority task (toggleLEDC)
     portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
@@ -209,35 +318,22 @@ void U1RX_ISR_handler(void)
 {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     
-    LATBSET = LEDA;
-    
     char rx;
-    getcU1(&rx);    
-    putcU1(rx);
+    getcU1(&rx);
     
-    if (rx == '\r')
+    if (rx == '\r' || rx == '\n')
+    {
         putcU1('\n');
+        putcU1('\r');
+    }
+    else
+    {
+        putcU1(rx);
+    }
     
-//    LATBSET = LEDD;
-//    
-//    #if ( configUSE_TRACE_FACILITY == 1 )
-//        vTracePrint(led_state_trace, "LEDD toggled on");
-//    #endif
-//    
-//    // give semaphore to unblock printToLCD
-//    xSemaphoreGiveFromISR(unblockPrintToLCD, &xHigherPriorityTaskWoken);    
-//    LATBCLR = LEDD;
-//    
-//    #if ( configUSE_TRACE_FACILITY == 1 )
-//        vTracePrint(led_state_trace, "LEDD toggled off");
-//    #endif
-//    
-//    // clear interrupt flag
-//    PORTRead(IOPORT_G);
-//    mCNClearIntFlag();
+    xQueueSendToBackFromISR(UartRxQueue, &rx, &xHigherPriorityTaskWoken);
     
-    LATBCLR = LEDA;
-    mU1RXClearIntFlag();
+    mU1AClearAllIntFlags();
     
     // switch context to higher priority task (toggleLEDC)
     portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
