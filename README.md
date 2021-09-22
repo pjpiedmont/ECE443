@@ -8,7 +8,7 @@ Toggles LEDA and LEDB depending on whether BTN1 and BTN2 are pressed. Uses a que
 
 ### Project 2 ###
 
-Demonstrates FreeRTOS task scheduling and priorities using LEDA -- LEDD. Each LED is operated at different times by a different task, some of which are tied to BTN1.
+Demonstrates FreeRTOS task scheduling and priorities using LEDA-LEDD. Each LED is operated at different times by a different task, some of which are tied to BTN1.
 
 ### Project 3 ###
 
