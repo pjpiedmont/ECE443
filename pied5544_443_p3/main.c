@@ -104,15 +104,15 @@ int main( void )
     LCD_init();
     
     UartRxQueue = xQueueCreate(DATA_LEN+1, sizeof(char));
-    unblockPrintToLCD = xSemaphoreCreateBinary();
+    unblockPrintToLCD = xSemaphoreCreateCounting(5, 0);
     
     if (UartRxQueue != NULL && unblockPrintToLCD != NULL)
     {
         // create tasks and start scheduler
-        xTaskCreate(printToLCD, "LCD Print", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(printToLCD, "LCD Print", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(writeToEEPROM, "EEPROM Write", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
         xTaskCreate(isEEPROMFull, "EEPROM Status", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-        xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+        xTaskCreate(toggleLEDC, "Toggle LEDC", configMINIMAL_STACK_SIZE, NULL, 3, NULL);
 
         vTaskStartScheduler();
     }
@@ -137,7 +137,7 @@ static void printToLCD(void* pvParameters)
     
     int start = 0;
     int end = 0;
-    int line_length = 0;
+    int line_count = 0;
     
     int i;
     for (i = 0; i < DATA_LEN+1; i++)
@@ -156,17 +156,20 @@ static void printToLCD(void* pvParameters)
         // debounce
         vTaskDelay(20 / portTICK_RATE_MS);
         
+        while(PORTReadBits(IOPORT_G, BTN1));
+        vTaskDelay(20 / portTICK_RATE_MS);
+        
         // clear CN interrupt flag after button has stopped bouncing
         PORTRead(IOPORT_G);
         mCNClearIntFlag();
         
-        btn = PORTReadBits(IOPORT_G, BTN1);
+//        btn = PORTReadBits(IOPORT_G, BTN1);
         
         // re-enable interrupt
         mCNIntEnable(1);
         
-        if (btn && !btn_prev)  // if BTN1 was just pressed
-        {
+//        if (btn && !btn_prev)  // if BTN1 was just pressed
+//        {
             if (eeprom_free_space < EEPROM_MAX_MSGS)  // if EEPROM is not empty
             {
                 LATBCLR = LEDA;
@@ -177,46 +180,66 @@ static void printToLCD(void* pvParameters)
                 eeprom_index_r %= EEPROM_MAX_MSGS;
                 
                 eeprom_free_space++;
+                
+                i = 0;
+                while (1)
+                {
+                    while (message[i] != 0 && line_count < 17)
+                    {
+                        if (message[i] == ' ')
+                            end = i;
+
+                        i++;
+                        line_count++;
+                    }
+
+                    if (message[i] == 0)
+                        end = i;
+
+                    strncpy(LCD_line2, message+start, end-start);
+
+                    strncpy(LCD_str+0, LCD_line1, 16);
+                    strncpy(LCD_str+16, LCD_line2, 16);
+
+                    LCD_clear();
+                    LCD_puts(LCD_str);
+
+                    strncpy(LCD_line1, LCD_line2, 16);
+                    strncpy(LCD_line2, "                ", 16);
+
+                    if (message[i] == 0)
+                        break;
+
+                    i = end + 1;
+                    start = end + 1;
+                    line_count = 0;
+
+                    vTaskDelay(1000 / portTICK_RATE_MS);
+                }
+
+                vTaskDelay(1000 / portTICK_RATE_MS);
+
+                strncpy(LCD_str+0, LCD_line1, 16);
+                strncpy(LCD_str+16, LCD_line2, 16);
+
+                LCD_clear();
+                LCD_puts(LCD_str);
+
+                vTaskDelay(1000 / portTICK_RATE_MS);
+                LCD_clear();
+
+                strncpy(LCD_line1, "                ", 16);
+                strncpy(LCD_line2, "                ", 16);
+                
+                vTaskDelay(1000 / portTICK_RATE_MS);
             }
-            
-            i = 0;
-//            while (message[i] != 0)
-//            {
-//                if (message[i] == ' ')
-//                    end = i;
-//                
-//                if (line_length > 16)
-//                {
-//                    strncpy(LCD_line2, message+start, end-start);
-//                    
-//                    start = end;
-//                    i = end;
-//                    line_length = 0;
-//                }
-//                
-//                strncpy(LCD_str+0, LCD_line1, 16);
-//                strncpy(LCD_str+16, LCD_line2, 16);
-//
-//                LCD_clear();
-//                LCD_puts(LCD_str);
-//                
-//                strncpy(LCD_line1, LCD_line2, 16);
-//                strncpy(LCD_line2, "                ", 16);
-//                
-//                i++;
-//                line_length++;
-//                
-//                vTaskDelay(1000 / portTICK_RATE_MS);
-//            }
-            
-//            strncpy(LCD_str+0, LCD_line1, 16);
-//            strncpy(LCD_str+16, LCD_line2, 16);
-//
-            LCD_clear();
-            LCD_puts(message);
-        }
+            else
+            {
+                putsU1("No more messages to display - EEPROM is empty");
+            }
+//        }
         
-        btn_prev = btn;
+//        btn_prev = btn;
     }
 }
 
@@ -235,7 +258,7 @@ static void writeToEEPROM(void* pvParameters)
     
     while (1)
     {
-        while (!terminated)
+        while (!terminated && msg_index < DATA_LEN)
         {
             if (uxQueueMessagesWaiting(UartRxQueue) > 0)
             {
@@ -264,7 +287,11 @@ static void writeToEEPROM(void* pvParameters)
             eeprom_index_w %= EEPROM_MAX_MSGS;
             
             eeprom_free_space--;
-        }            
+        }
+        else
+        {
+            putsU1("Cannot save new message - EEPROM is full");
+        }
         
         for (i = 0; i < DATA_LEN+1; i++)
             message[i] = 0;
@@ -272,6 +299,8 @@ static void writeToEEPROM(void* pvParameters)
         msg_index = 0;
         terminated = 0;
         rx = 0;
+        
+//        taskYIELD();
     }
 }
 

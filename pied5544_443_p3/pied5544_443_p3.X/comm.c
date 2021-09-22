@@ -49,7 +49,7 @@ unsigned int BRG;
                         (UART_RX_ENABLE | UART_TX_ENABLE) , BRG );
             break;
     }
-    printf("Cerebot MX7ck Serial Port 1 ready\r\n");
+    printf("\r\nCerebot MX7ck Serial Port 1 ready\r\n");
 }
 
 /* _mon_putc FUNCTION DESCRIPTION ******************************************
