@@ -1,18 +1,16 @@
-# README #
+# Project 1 #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+Demonstrates the use of FreeRTOS task scheduling. Toggles the state of LED1 or LED2 whenever BTN1 or BTN2, respectively, is pressed. Uses two tasks to accomplish this:
 
-### What is this repository for? ###
+* sendButton
+* toggleLED
 
-* Creates two tasks which alternate lighting LEDA or LEDB.
+The value of each button is sent from sendButton to toggleLED using two queues.
 
-* Version 1.0
+### Author ###
 
-### How do I get set up? ###
+Parker Piedmont
 
-* Built on FreeRTOSv202104.00 with limited markup for Tracealyzer and Doxygen.
+### Date Created ###
 
-
-### Who do I talk to? ###
-
-* Dr. J
+September 7, 2021
