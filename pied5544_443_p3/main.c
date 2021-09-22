@@ -46,8 +46,11 @@ void PMP_init(void);
 // enable CN interrupt
 void cn_interrupt_initialize(void);
 
-// C portion of ISR
+// C portion of CN ISR
 void __attribute__( (interrupt(ipl1), vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
+
+void uart_rx_interrupt_initialize(void);
+void __attribute__( (interrupt(ipl1), vector(_UART_1_VECTOR))) U1RX_ISR_handler( void );
 
 // 
 static void printToLCD(void* pvParameters);
@@ -55,6 +58,7 @@ static void writeToEEPROM(void* pvParameters);
 
 static void toggleLEDC(void* pvParameters);
 
+xQueueHandle UARTCharQueue;
 xSemaphoreHandle unblockPrintToLCD;
     
 #if ( configUSE_TRACE_FACILITY == 1 )
@@ -87,6 +91,7 @@ int main( void )
 
     LCD_init();
     
+    xQueueCreate(DATA_LEN, sizeof(char*));
     vSemaphoreCreateBinary(unblockPrintToLCD);
     
     if (unblockPrintToLCD != NULL)
@@ -141,8 +146,8 @@ static void printToLCD(void* pvParameters)
 
 static void writeToEEPROM(void* pvParameters)
 {
-    char write_data[DATA_LEN];//, read_data[DATA_LEN];
-    int mem_addr = 0x86;//, equal = 1;
+    char write_data[DATA_LEN];
+    unsigned int mem_addr = 0x86;
     
     int i;
     for (i = 0; i < DATA_LEN; i++)
@@ -200,6 +205,44 @@ void CN_ISR_handler(void)
     portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
+void U1RX_ISR_handler(void)
+{
+    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
+    
+    LATBSET = LEDA;
+    
+    char rx;
+    getcU1(&rx);    
+    putcU1(rx);
+    
+    if (rx == '\r')
+        putcU1('\n');
+    
+//    LATBSET = LEDD;
+//    
+//    #if ( configUSE_TRACE_FACILITY == 1 )
+//        vTracePrint(led_state_trace, "LEDD toggled on");
+//    #endif
+//    
+//    // give semaphore to unblock printToLCD
+//    xSemaphoreGiveFromISR(unblockPrintToLCD, &xHigherPriorityTaskWoken);    
+//    LATBCLR = LEDD;
+//    
+//    #if ( configUSE_TRACE_FACILITY == 1 )
+//        vTracePrint(led_state_trace, "LEDD toggled off");
+//    #endif
+//    
+//    // clear interrupt flag
+//    PORTRead(IOPORT_G);
+//    mCNClearIntFlag();
+    
+    LATBCLR = LEDA;
+    mU1RXClearIntFlag();
+    
+    // switch context to higher priority task (toggleLEDC)
+    portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+}
+
 /* prvSetupHardware Function Description ***************************************
  * SYNTAX:          static void prvSetupHardware(void)
  * KEYWORDS:        Initialize, interrupts
@@ -222,6 +265,7 @@ static void prvSetupHardware( void )
     initialize_uart1(19200, ODD_PARITY);
     
     cn_interrupt_initialize();
+    uart_rx_interrupt_initialize();
     
     /* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
@@ -264,6 +308,14 @@ void cn_interrupt_initialize(void)
     mCNIntEnable(1);            // Enable CNinterrupts
     
     // Global interrupts must enabled to complete the initialization.
+}
+
+void uart_rx_interrupt_initialize(void)
+{
+    mU1ASetIntPriority(1);
+    mU1ASetIntSubPriority(0);
+    mU1AClearAllIntFlags();
+    mU1ARXIntEnable(1);
 }
 
 /*-----------------------------------------------------------*/
