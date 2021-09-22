@@ -47,9 +47,9 @@
 /* CONSTANTS ================================================================ */
 
 // I2C configs
-#define Fsck        400000
-#define BRG_VAL     ((FPB / 2 / Fsck) - 2)
-#define MAX_MSG_LEN    80
+#define Fsck        	400000
+#define BRG_VAL     	((FPB / 2 / Fsck) - 2)
+#define MAX_MSG_LEN   	80
 
 // EEPROM configs
 #define SLAVE_ADDRESS   	0x50
@@ -279,7 +279,7 @@ static void printToLCD(void* pvParameters)
                     end = i;
                 
                 if (end <= i-16)  // if there are no spaces in the line
-                    end = i - 1;
+                    end = i - 1;  // don't cut of last character
 
 				// copy nicely broken line to a buffer filled with spaces
                 strncpy(LCD_line2, message+start, end-start);
