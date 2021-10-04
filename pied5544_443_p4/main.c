@@ -190,7 +190,7 @@ static void readAndSaveTemperature(void* pvParameters)
     char temp_str[20];
     
 	// pointer to string - sent through message buffer
-    char* temp_str_ptr = &temp_str[0];
+    char* temp_str_ptr = temp_str;
     
 	// for error checking
     size_t xBytesSent;
@@ -239,14 +239,14 @@ static void readAndSaveTemperature(void* pvParameters)
 		#endif
         
 		// send pointer to temp_str - not the contents of the string
-        xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str_ptr, 4, 0);
+        xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str_ptr, sizeof(char*), 0);
         i++;
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Sent to message buffer");
 		#endif
         
-        if (xBytesSent != 4)
+        if (xBytesSent != sizeof(char*))
         {
             #if ( configUSE_TRACE_FACILITY == 1 )
 				vTracePrint(error_trace, "Incorrect number of bytes written\
