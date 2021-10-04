@@ -1,18 +1,11 @@
-# README #
+# Project 3 #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+Demonstrates the use of FreeRTOS task scheduling and interrupt handling. Receives messages from UART1, stores them in an I2C EEPROM, retrieves them from the EEPROM, and prints them to an LCD. Uses the UART1 RX interrupt to receive individual characters from UART1. Passes them through a queue to a task, which stores them in the EEPROM. When BTN1 is pressed, another task will read from the EEPROM and display the message on the LCD, breaking lines in nice places and scrolling upward. LEDA and LEDB indicate whether the EEPROM can be written to or read from, and LEDC acts as a "heartbeat" to assess timings.
 
-### What is this repository for? ###
+### Author ###
 
-* Creates two tasks which alternate lighting LEDA or LEDB.
+Parker Piedmont
 
-* Version 1.0
+### Date Created ###
 
-### How do I get set up? ###
-
-* Built on FreeRTOSv202104.00 with limited markup for Tracealyzer and Doxygen.
-
-
-### Who do I talk to? ###
-
-* Dr. J
+September 21, 2021

@@ -9,6 +9,8 @@
       <itemPath>../config_bits.h</itemPath>
       <itemPath>../trcConfig.h</itemPath>
       <itemPath>../trcSnapshotConfig.h</itemPath>
+      <itemPath>../IRlib.h</itemPath>
+      <itemPath>../LCDlib.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -24,11 +26,15 @@
         <itemPath>../../../FreeRTOS/Source/portable/MPLAB/PIC32MX/port.c</itemPath>
         <itemPath>../../../FreeRTOS/Source/portable/MPLAB/PIC32MX/port_asm.S</itemPath>
         <itemPath>../../../FreeRTOS/Source/portable/MemMang/heap_4.c</itemPath>
+        <itemPath>../../../FreeRTOS/Source/stream_buffer.c</itemPath>
       </logicalFolder>
       <itemPath>../CerebotMX7cK.c</itemPath>
-      <itemPath>../main.c</itemPath>
       <itemPath>../../../TraceRecorder/trcKernelPort.c</itemPath>
       <itemPath>../../../TraceRecorder/trcSnapshotRecorder.c</itemPath>
+      <itemPath>../main.c</itemPath>
+      <itemPath>../cn_isr_wrapper.S</itemPath>
+      <itemPath>../IRlib.c</itemPath>
+      <itemPath>../LCDlib.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -211,6 +217,7 @@
         <property key="ToolFirmwareFilePath"
                   value="Press to browse for a specific firmware version"/>
         <property key="ToolFirmwareOption.UseLatestFirmware" value="true"/>
+        <property key="firmware.download.all" value="false"/>
         <property key="memories.bootflash" value="true"/>
         <property key="memories.configurationmemory" value="true"/>
         <property key="memories.dataflash" value="true"/>
