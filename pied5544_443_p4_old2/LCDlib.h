@@ -1,3 +1,15 @@
+/** @file LCDlib.h
+ * 
+ * @brief
+ * Declares functions to communicate with the LCD using the PMP.
+ *
+ * @author
+ * Parker Piedmont
+ * 
+ * @date
+ * 02 Nov 2020
+ */
+
 // #include guard
 #ifndef __LCDLIB_H__
 #define __LCDLIB_H__
@@ -15,3 +27,5 @@ char busyLCD(void);
 void LCD_delay(unsigned int ms);
 
 #endif
+
+/*** end of file ***/

@@ -1,18 +1,19 @@
 /** @file main.c
  * 
  * @brief
- * Main program file for ECE 443 Project 2 using FreeRTOS V202104.00 
+ * Main program file for ECE 443 Project 4 using FreeRTOS V202104.00 
  *
  * @details       
- * Demonstrates the use of FreeRTOS task scheduling and interrupt handling.
- * Indicates the state of BTN1 on LEDA. Toggles LEDB every millisecond. Toggles
- * LEDC in a push-on/push-off manner. Lights LEDD while the interrupt handler
- * is active.
+ * Demonstrates the use of SMBus, direct task notifications, and message
+ * buffers. Simulates a change notice interrupt every 6 ms, unblocking a task
+ * that reads from an IR sensor over SMBus. Calculates the temperature and sends
+ * it through a message buffer to a task that prints it to the LCD.
  *
  * @author
  * Parker Piedmont
+ * 
  * @date
- * 13 Sep 2021
+ * 04 Oct 2021
  */
 
 
@@ -38,6 +39,9 @@
 // user libraries
 #include "LCDlib.h"
 #include "IRlib.h"
+
+// header for this file
+#include "main.c"
 
 
 
@@ -136,6 +140,15 @@ int main( void )
 
 /* TASK DEFINITIONS ========================================================= */
 
+/*!
+ * @brief
+ * Generates a virtual change notice interrupt every 6 ms by setting the CN
+ * interrupt flag.
+ * 
+ * @param[in] pvParameters  Unused but required by FreeRTOS
+ * 
+ * @return None
+ */
 static void generateCNInt(void* pvParameters)
 {
 	const TickType_t period = 6 / portTICK_RATE_MS;
@@ -148,13 +161,24 @@ static void generateCNInt(void* pvParameters)
 	}
 }
 
+/*!
+ * @brief
+ * Reads the temperature from an IR sensor using SMBus and sends it to a message
+ * buffer.
+ * 
+ * @param[in] pvParameters  Unused but required by FreeRTOS
+ * 
+ * @return None
+ */
 static void readAndSaveTemperature(void* pvParameters)
 {
+	// SMBus parameters
     const uint8_t slave_addr = 0x5A;
     const uint8_t command = 0x07;
     uint8_t ir_data[3];
     const int data_len = 3;
     
+	// used to calculate temperature in deg C
     uint16_t temp_2_bytes;
     float kelvin;
     float celsius;
@@ -166,27 +190,34 @@ static void readAndSaveTemperature(void* pvParameters)
     
     int i = 0;
     
+	// save task handle for notifications from ISR
 	readTaskHandle = xTaskGetCurrentTaskHandle();
 
 	while (1)
 	{
+		// receive notification from CN ISR
 		ulTaskNotifyTakeIndexed(0, pdTRUE, portMAX_DELAY);
         LATBINV = LEDB;
         
         I2C1_IR_Read(slave_addr, command, ir_data, data_len);
+
+		// assemble bytes from IR sensor into a single integer
+		// IR sensor sends temp as 2 bytes in little-endian order
         temp_2_bytes = (ir_data[1] << 8) | ir_data[0];
         
-        if (temp_2_bytes > 0x7fff)
+        if (temp_2_bytes > 0x7fff)  // sensor error
         {
             sprintf(temp_str, "Temp = xxx.xx C");
         }
         else
         {
+			// convert temp from binary to deg C
             kelvin = temp_2_bytes * 0.02f;
             celsius = kelvin - 273.15f;
             sprintf(temp_str, "Temp = %3.2f C", celsius);
         }
         
+		// send pointer to temp_str - not the contents of the string
         xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str_ptr, 4, 0);
         i++;
         
@@ -197,6 +228,14 @@ static void readAndSaveTemperature(void* pvParameters)
 	}
 }
 
+/*!
+ * @brief
+ * Reads the temperature from a message buffer and prints it to an LCD.
+ * 
+ * @param[in] pvParameters  Unused but required by FreeRTOS
+ * 
+ * @return None
+ */
 static void printToLCD(void* pvParameters)
 {
     char* temp_str_ptr;
@@ -212,6 +251,14 @@ static void printToLCD(void* pvParameters)
 	}
 }
 
+/*!
+ * @brief
+ * Toggles LEDA every 3 ms.
+ * 
+ * @param[in] pvParameters  Unused but required by FreeRTOS
+ * 
+ * @return None
+ */
 static void toggleLEDA(void* pvParameters)
 {
 	while (1)
@@ -225,6 +272,12 @@ static void toggleLEDA(void* pvParameters)
 
 /* INTERRUPT SERVICE ROUTINES =============================================== */
 
+/*!
+ * @brief
+ * Unblocks readAndSaveTemperature when the CN interrupt is triggered.
+ * 
+ * @return None
+ */
 void CN_ISR_handler(void)
 {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
@@ -248,9 +301,15 @@ void CN_ISR_handler(void)
 
 
 
-
 /* SETUP FUNCTION DEFINITIONS =============================================== */
 
+/*!
+ * @brief
+ * Configures the PIC32 hardware to support the operations performed by this 
+ * project.
+ * 
+ * @return None
+ */
 static void prvSetupHardware( void )
 {
     // set up Cerebot components
@@ -272,6 +331,12 @@ static void prvSetupHardware( void )
     portDISABLE_INTERRUPTS();
 }
 
+/*!
+ * @brief
+ * Configures the parallel master port to communicate with the LCD.
+ * 
+ * @return None
+ */
 void PMP_init(void)
 {
     int cfg1 = PMP_ON | PMP_READ_WRITE_EN | PMP_READ_POL_HI | PMP_WRITE_POL_HI;
@@ -282,6 +347,12 @@ void PMP_init(void)
     mPMPOpen(cfg1, cfg2, cfg3, cfg4);
 }
 
+/*!
+ * @brief
+ * Enables the CN interrupt on BTN1.
+ * 
+ * @return None
+ */
 void cn_interrupt_initialize(void)
 {
     unsigned int dummy; // used to hold PORT read value

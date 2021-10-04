@@ -1,24 +1,38 @@
-/* ************************************************************************** */
-/** Descriptive File Name
-
-  @Company
-    Company Name
-
-  @File Name
-    filename.c
-
-  @Summary
-    Brief description of the file.
-
-  @Description
-    Describe the purpose of this file.
+/** @file IRlib.c
+ * 
+ * @brief
+ * Contains functions to communicate with the SMBus IR sensor.
+ *
+ * @author
+ * Parker Piedmont
+ * 
+ * @date
+ * 04 Oct 2021
  */
-/* ************************************************************************** */
 
+// PIC32 includes
 #include <plib.h>
+
+// Cerebot includes
 #include "CerebotMX7cK.h"
+
+// C libraries
+#include <stdint.h>
+
+// header for this file
 #include "IRlib.h"
 
+/*!
+ * @brief
+ * Reads from the IR sensor using SMBus.
+ * 
+ * @param[in] slave_addr  Slave address of the IR sensor
+ * @param[in] command	  Instructions sent to sensor
+ * @param[out] data		  Data read from sensor
+ * @param[in] data_len    Number of bytes to read
+ * 
+ * @return Whether an error occurred
+ */
 int I2C1_IR_Read(uint8_t slave_addr, uint8_t command, uint8_t* data, int data_len)
 {
     uint8_t ctrl_byte_w;
@@ -62,3 +76,5 @@ int I2C1_IR_Read(uint8_t slave_addr, uint8_t command, uint8_t* data, int data_le
 
     return write_err;
 }
+
+/*** end of file ***/

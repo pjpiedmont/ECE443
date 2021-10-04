@@ -1,7 +1,31 @@
+/** @file LCDlib.c
+ * 
+ * @brief
+ * Contains functions to communicate with the LCD using the PMP.
+ *
+ * @author
+ * Parker Piedmont
+ * 
+ * @date
+ * 02 Nov 2020
+ */
+
+// PIC32 includes
 #include <plib.h>
+
+// Cerebot includes
 #include "CerebotMX7cK.h"
+
+// header for this file
 #include "LCDlib.h"
 
+/*!
+ * @brief
+ * Initializes the LCD by clearing it and setting the cursor in the top left
+ * corner.
+ * 
+ * @return None
+ */
 void LCD_init(void)
 {
     LCD_delay(20);
@@ -13,20 +37,46 @@ void LCD_init(void)
     LCD_delay(10);
 }
 
+/*!
+ * @brief
+ * Reads from one of the LCD's registers.
+ * 
+ * @param[in] addr  Address of the register to read
+ * 
+ * @return Value of the register
+ */
 char readLCD(int addr)
 {
     PMPSetAddress(addr);         // Set LCD RS control
     mPMPMasterReadByte();        // initiate dummy read sequence
     return mPMPMasterReadByte(); // read actual data
-} // End of readLCD
+}
 
+/*!
+ * @brief
+ * Writes to one of the LCD's registers.
+ * 
+ * @param[in] addr  Address of the register to write
+ * @param[in] c	  	Value to write
+ * 
+ * @return None
+ */
 void writeLCD(int addr, char c)
 {
     while (busyLCD());     // Wait for LCD to be ready
     PMPSetAddress(addr);  // Set LCD RS control
     PMPMasterWrite(c);    // initiate write sequence
-} // End of writeLCD
+}
 
+/*!
+ * @brief
+ * Prints one character to the LCD and advances the cursor. Sets cursor to the
+ * start of the next line on \r or to the start of the current line on \n.
+ * 
+ * @param[in] c  Character to print
+ * 
+ * @return None
+ */
 void LCD_putc(char c)
 {
     unsigned int addr;
@@ -60,6 +110,14 @@ void LCD_putc(char c)
     }
 }
 
+/*!
+ * @brief
+ * Prints an entire string to the LCD.
+ * 
+ * @param[in] char_string  String to print
+ * 
+ * @return None
+ */
 void LCD_puts(char *char_string)
 {
     while (*char_string) // Look for end of string NULL character
@@ -69,29 +127,25 @@ void LCD_puts(char *char_string)
     }
 }
 
+/*!
+ * @brief
+ * Clears the LCD and sets the cursor to the top left corner.
+ * 
+ * @return None
+ */
 void LCD_clear(void)
 {
     writeLCD(0, 0x01);
 }
 
-//void LCD_clearline(void)
-//{
-//    char line_addr;
-//    int i;
-//
-//    if (0x00 <= readLCD(0) <= 0x0f)
-//        line_addr = 0x80;
-//    else
-//        line_addr = 0xc0;
-//
-//    writeLCD(0, line_addr);
-//
-//    for (i = 0; i < 16; i++)
-//        LCD_putc(' ');
-//
-//    writeLCD(0, line_addr);
-//}
-
+/*!
+ * @brief
+ * Clears one line of the LCD and sets the cursor to the beginning of the line.
+ * 
+ * @param[in] line  Row to clear
+ * 
+ * @return None
+ */
 void LCD_clearline(int line)
 {
     switch (line)
@@ -110,6 +164,15 @@ void LCD_clearline(int line)
     }
 }
 
+/*!
+ * @brief
+ * Sets the position of the cursor.
+ * 
+ * @param[in] line  Row
+ * @param[in] pos	Column
+ * 
+ * @return None
+ */
 void LCD_set_cursor_pos(int line, int pos)
 {
     switch (line)
@@ -124,17 +187,16 @@ void LCD_set_cursor_pos(int line, int pos)
     }
 }
 
+/*!
+ * @brief
+ * Checks whether the LCD is busy writing to a register.
+ * 
+ * @return Non-zero if busy, zero if not busy
+ */
 char busyLCD(void)
 {
     char busy_flag = readLCD(0) & 0x80;
     return busy_flag;
 }
 
-void LCD_delay(unsigned int ms)
-{
-	unsigned int tWait, tStart;
-	tStart = ReadCoreTimer();
-	tWait = (CORE_MS_TICK_RATE * ms);
-	while ((ReadCoreTimer() - tStart) < tWait);
-	LATBINV = LEDA;
-}
+/*** end of file ***/
