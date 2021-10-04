@@ -186,8 +186,16 @@ static void readAndSaveTemperature(void* pvParameters)
     float celsius;
     char temp_str[20];
     
-	// pointer to string - sent through message buffer
-    char* temp_str_ptr = temp_str;
+    int i = 0;
+    
+    uint32_t str_addr = (uint32_t) temp_str;
+    uint8_t str_addr_bytes[4];
+    
+    str_addr_bytes[0] = str_addr & 0xff;
+    str_addr_bytes[1] = (str_addr >> 8) & 0xff;
+    str_addr_bytes[2] = (str_addr >> 16) & 0xff;
+    str_addr_bytes[3] = (str_addr >> 24) & 0xff;
+    i++;
     
 	// for error checking
     size_t xBytesSent;
@@ -235,7 +243,7 @@ static void readAndSaveTemperature(void* pvParameters)
 		#endif
         
 		// send pointer to temp_str - not the contents of the string
-        xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str, 20, 0);
+        xBytesSent = xMessageBufferSend(tempBuffer, (void*)str_addr_bytes, 4, 0);
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Sent to message buffer");
@@ -254,6 +262,7 @@ static void readAndSaveTemperature(void* pvParameters)
 /*!
  * @brief
  * Reads the temperature from a message buffer and prints it to an LCD.
+ * Temperature is passed using a string pointer.
  * 
  * @param[in] pvParameters  Unused but required by FreeRTOS
  * 
@@ -261,9 +270,14 @@ static void readAndSaveTemperature(void* pvParameters)
  */
 static void printToLCD(void* pvParameters)
 {
-    char* temp_str_ptr;
-	char temp_str[20];
+    char* temp_str;
+    
+    uint32_t str_addr = 0x00000000;
+    uint8_t str_addr_bytes[4];
+    
     size_t xReceivedBytes;
+    
+    int i = 0;
 
 	while (1)
 	{
@@ -271,7 +285,15 @@ static void printToLCD(void* pvParameters)
 			vTracePrint(lcd_trace, "Receiving from message buffer");
 		#endif
 
-        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)temp_str, 20, 0);
+        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)str_addr_bytes, 4, 0);
+        
+        str_addr |= str_addr_bytes[0];
+        str_addr |= (str_addr_bytes[1] << 8);
+        str_addr |= (str_addr_bytes[2] << 16);
+        str_addr |= (str_addr_bytes[3] << 24);
+        
+        temp_str = (char*) str_addr;
+        i++;
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Received from message buffer");
