@@ -85,11 +85,12 @@ static MessageBufferHandle_t tempBuffer = NULL;
 /* TRACE STRINGS ============================================================ */
     
 #if ( configUSE_TRACE_FACILITY == 1 )
-    traceString led_state_trace;
-    traceString btn1_state_trace;
-    traceString ledb_trace;
+    traceString cn_isr_trace;
+	traceString heartbeat_trace;
+	traceString read_and_save_trace;
+	traceString lcd_trace;
+	traceString error_trace;
 #endif
-
 
 
 
@@ -102,13 +103,14 @@ int main( void )
     // initialize tracealyzer and start recording
     #if ( configUSE_TRACE_FACILITY == 1 )
         vTraceEnable(TRC_START);
-        led_state_trace = xTraceRegisterString("LED state");
-        btn1_state_trace = xTraceRegisterString("BTN1 state");
-        ledb_trace = xTraceRegisterString("LEDB breakpoint");
+        cn_isr_trace = xTraceRegisterString("CN ISR");
+		heartbeat_trace = xTraceRegisterString("Heartbeat");
+		read_and_save_trace = xTraceRegisterString("Read & Save");
+		lcd_trace = xTraceRegisterString("LCD");
+		error_trace = xTraceRegisterString("Error");
     #endif
 
     LCD_init();
-        
     tempBuffer = xMessageBufferCreate(8);
 
 	if (tempBuffer != NULL)
@@ -130,7 +132,10 @@ int main( void )
 	// creation fails
 	while (1)
 	{
-		// do nothing
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(error_trace, "Heap allocation or message buffer\
+									  creation failed");
+		#endif
 	}
 
     return 1;
@@ -184,8 +189,10 @@ static void readAndSaveTemperature(void* pvParameters)
     float celsius;
     char temp_str[20];
     
+	// pointer to string - sent through message buffer
     char* temp_str_ptr = &temp_str[0];
     
+	// for error checking
     size_t xBytesSent;
     
     int i = 0;
@@ -197,9 +204,18 @@ static void readAndSaveTemperature(void* pvParameters)
 	{
 		// receive notification from CN ISR
 		ulTaskNotifyTakeIndexed(0, pdTRUE, portMAX_DELAY);
-        LATBINV = LEDB;
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(read_and_save_trace, "Unblocked");
+			vTracePrint(read_and_save_trace, "Reading IR sensor");
+		#endif
         
         I2C1_IR_Read(slave_addr, command, ir_data, data_len);
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(read_and_save_trace, "Read IR sensor");
+			vTracePrint(read_and_save_trace, "Calculating temperature");
+		#endif
 
 		// assemble bytes from IR sensor into a single integer
 		// IR sensor sends temp as 2 bytes in little-endian order
@@ -216,14 +232,26 @@ static void readAndSaveTemperature(void* pvParameters)
             celsius = kelvin - 273.15f;
             sprintf(temp_str, "Temp = %3.2f C", celsius);
         }
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(read_and_save_trace, "Calculated temperature");
+			vTracePrint(read_and_save_trace, "Sending to message buffer");
+		#endif
         
 		// send pointer to temp_str - not the contents of the string
         xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str_ptr, 4, 0);
         i++;
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(read_and_save_trace, "Sent to message buffer");
+		#endif
         
         if (xBytesSent != 4)
         {
-            // error
+            #if ( configUSE_TRACE_FACILITY == 1 )
+				vTracePrint(error_trace, "Incorrect number of bytes written\
+										  to message buffer");
+			#endif
         }
 	}
 }
@@ -246,8 +274,25 @@ static void printToLCD(void* pvParameters)
 
 	while (1)
 	{
-        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)temp_str_ptr, 4, portMAX_DELAY);
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(lcd_trace, "Receiving from message buffer");
+		#endif
+
+        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)temp_str_ptr,
+											   4, portMAX_DELAY);
         i++;
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(read_and_save_trace, "Received from message buffer");
+			vTracePrint(read_and_save_trace, "Printing to LCD");
+		#endif
+
+		LCD_clear();
+		LCD_puts(temp_str);
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(read_and_save_trace, "Printed to LCD");
+		#endif
 	}
 }
 
@@ -264,6 +309,11 @@ static void toggleLEDA(void* pvParameters)
 	while (1)
     {
         LATBINV = LEDA;
+
+		#if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(heartbeat_trace, "Toggled LEDA");
+		#endif
+
         vTaskDelay(3 / portTICK_RATE_MS);
     }
 }
@@ -281,15 +331,21 @@ static void toggleLEDA(void* pvParameters)
 void CN_ISR_handler(void)
 {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
-    LATBSET = LEDD;
+
+	#if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(cn_isr_trace, "Starting");
+    #endif
     
 	if (readTaskHandle != NULL)
 	{
     	vTaskNotifyGiveIndexedFromISR(readTaskHandle, 0,
                                       &xHigherPriorityTaskWoken);
 	}
-    
-    LATBCLR = LEDD;
+
+	#if ( configUSE_TRACE_FACILITY == 1 )
+		vTracePrint(cn_isr_trace, "Notified readAndSaveTemperature");
+        vTracePrint(cn_isr_trace, "Exiting");
+    #endif
     
     // clear interrupt flag
     PORTRead(IOPORT_G);
@@ -349,7 +405,7 @@ void PMP_init(void)
 
 /*!
  * @brief
- * Enables the CN interrupt on BTN1.
+ * Enables the CN interrupt on BTN1 at priority level 2.
  * 
  * @return None
  */
@@ -467,3 +523,5 @@ volatile unsigned long ul = 0;
 	}
 	__asm volatile( "ei" );
 }
+
+/*** end of file ***/
