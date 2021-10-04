@@ -199,4 +199,21 @@ char busyLCD(void)
     return busy_flag;
 }
 
+/*!
+ * @brief
+ * Waits a specified time.
+ * 
+ * @param[in] ms  Number of milliseconds to wait
+ * 
+ * @return None
+ */
+void LCD_delay(unsigned int ms)
+{
+	unsigned int tWait, tStart;
+	tStart = ReadCoreTimer();
+	tWait = (CORE_MS_TICK_RATE * ms);
+	while ((ReadCoreTimer() - tStart) < tWait);
+	LATBINV = LEDA;
+}
+
 /*** end of file ***/

@@ -40,16 +40,13 @@
 #include "LCDlib.h"
 #include "IRlib.h"
 
-// header for this file
-#include "main.c"
-
 
 
 /* CONSTANTS ================================================================ */
 
 // I2C configs
-const int FSCK = 400000;
-const int BRG_VAL = ((FPB / 2 / 400000) - 2);
+#define FSCK  80000
+const int BRG_VAL = ((FPB / 2 / FSCK) - 2);
 
 // IR sensor configs
 const uint8_t SLAVE_ADDRESS = 0x5A;
@@ -111,7 +108,7 @@ int main( void )
     #endif
 
     LCD_init();
-    tempBuffer = xMessageBufferCreate(8);
+    tempBuffer = xMessageBufferCreate(24);
 
 	if (tempBuffer != NULL)
 	{
@@ -178,7 +175,7 @@ static void generateCNInt(void* pvParameters)
 static void readAndSaveTemperature(void* pvParameters)
 {
 	// SMBus parameters
-    const uint8_t slave_addr = 0x5A;
+    const uint8_t slave_addr = 0x5a;
     const uint8_t command = 0x07;
     uint8_t ir_data[3];
     const int data_len = 3;
@@ -194,8 +191,6 @@ static void readAndSaveTemperature(void* pvParameters)
     
 	// for error checking
     size_t xBytesSent;
-    
-    int i = 0;
     
 	// save task handle for notifications from ISR
 	readTaskHandle = xTaskGetCurrentTaskHandle();
@@ -221,6 +216,7 @@ static void readAndSaveTemperature(void* pvParameters)
 		// IR sensor sends temp as 2 bytes in little-endian order
         temp_2_bytes = (ir_data[1] << 8) | ir_data[0];
         
+        // calculate temperature
         if (temp_2_bytes > 0x7fff)  // sensor error
         {
             sprintf(temp_str, "Temp = xxx.xx C");
@@ -239,8 +235,7 @@ static void readAndSaveTemperature(void* pvParameters)
 		#endif
         
 		// send pointer to temp_str - not the contents of the string
-        xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str_ptr, sizeof(char*), 0);
-        i++;
+        xBytesSent = xMessageBufferSend(tempBuffer, (void*)temp_str, 20, 0);
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Sent to message buffer");
@@ -269,8 +264,6 @@ static void printToLCD(void* pvParameters)
     char* temp_str_ptr;
 	char temp_str[20];
     size_t xReceivedBytes;
-    
-    int i = 0;
 
 	while (1)
 	{
@@ -278,9 +271,7 @@ static void printToLCD(void* pvParameters)
 			vTracePrint(lcd_trace, "Receiving from message buffer");
 		#endif
 
-        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)temp_str_ptr,
-											   4, portMAX_DELAY);
-        i++;
+        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)temp_str, 20, 0);
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Received from message buffer");
@@ -289,6 +280,9 @@ static void printToLCD(void* pvParameters)
 
 		LCD_clear();
 		LCD_puts(temp_str);
+        
+        // LCD is illegible if it updates too quickly
+        vTaskDelay(100 / portTICK_RATE_MS);
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Printed to LCD");
@@ -501,6 +495,11 @@ void _general_exception_handler( unsigned long ulCause, unsigned long ulStatus )
 {
 	/* This overrides the definition provided by the kernel.  Other exceptions 
 	should be handled here. */
+    
+    #if ( configUSE_TRACE_FACILITY == 1 )
+        vTracePrint(error_trace, "Exception encountered");
+    #endif
+
 	for( ;; );
 }
 /*-----------------------------------------------------------*/
