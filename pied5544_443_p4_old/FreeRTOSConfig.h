@@ -44,7 +44,7 @@
 
 #define configUSE_PREEMPTION					1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION	1
-#define configUSE_IDLE_HOOK						0
+#define configUSE_IDLE_HOOK						1
 #define configUSE_TICK_HOOK						0
 #define configTICK_RATE_HZ						( ( TickType_t ) 1000 )
 #define configCPU_CLOCK_HZ						( 80000000UL )
@@ -90,10 +90,9 @@ to exclude the API function. */
 #define INCLUDE_eTaskGetState				1
 
 /* Prevent C specific syntax being included in assembly files. */
-/* Halt debugger on failed assertions						   */
 #ifndef __LANGUAGE_ASSEMBLY
 	void vAssertCalled( const char *pcFileName, unsigned long ulLine );
-	#define configASSERT( x ) if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }	
+	#define configASSERT( x ) if( ( x ) == 0 ) vAssertCalled( __FILE__, __LINE__ )
 #endif
 
 /* The priority at which the tick interrupt runs.  This should probably be

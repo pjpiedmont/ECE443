@@ -1,16 +1,18 @@
-# Project 2 #
+# README #
 
-Lights LEDA-LEDD depending on the state of BTN1. The LEDs are lit according to the following conditions:
+This README would normally document whatever steps are necessary to get your application up and running.
 
-* LEDA: lit when BTN1 is in the pressed state
-* LEDB: toggled every millisecond
-* LEDC: toggled by BTN1 in a push on/push off configuration
-* LEDD: lit during the change notice ISR
+### What is this repository for? ###
 
-### Author ###
+* Creates two tasks which alternate lighting LEDA or LEDB.
 
-Parker Piedmont
+* Version 1.0
 
-### Date Created ###
+### How do I get set up? ###
 
-September 13, 2021
+* Built on FreeRTOSv202104.00 with limited markup for Tracealyzer and Doxygen.
+
+
+### Who do I talk to? ###
+
+* Dr. J

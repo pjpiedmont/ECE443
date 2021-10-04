@@ -1,29 +1,26 @@
 /** @file main.c
  * 
- * @brief
- * Main program file for ECE 443 Project 2 using FreeRTOS V202104.00 
+ * @brief Main program file for Reference Design 1 using FreeRTOS V2021 
  *
  * @details       
- * Demonstrates the use of FreeRTOS task scheduling and interrupt handling.
- * Indicates the state of BTN1 on LEDA. Toggles LEDB every millisecond. Toggles
- * LEDC in a push-on/push-off manner. Lights LEDD while the interrupt handler
- * is active.
+ * Demonstrates the use of FreeRTOS, Doxygen, Git, and Tracealyzer.
+ * Built on FreeRTOS V202104.00, design alternates between two tasks
+ * which light LEDA or LEDB while turning off the other LED.
  *
  * @author
- * Parker Piedmont
+ * Dr J
  * @date
- * 13 Sep 2021
+ * 01 Jun 2021
  */
 
 
-
-/* INCLUDES ================================================================= */
+/******************************************************************************
+ * This project provides a simple blinky style project,
+ */
 
 /* Kernel includes. */
 #include "FreeRTOS.h"
 #include "task.h"
-#include "queue.h"
-#include "semphr.h"
 
 /* Hardware specific includes. */
 #include "CerebotMX7cK.h" // JFF
@@ -31,207 +28,135 @@
 /* Standard demo includes. */
 #include <plib.h>
 
+/*-----------------------------------------------------------*/
 
-
-/* FUNCTION PROTOTYPES ====================================================== */
-
-// tasks
-static void generateCNInt(void* pvParameters);
-static void readAndSaveTemperature(void* pvParameters);
-static void printToLCD(void* pvParameters);
-static void toggleLEDA(void* pvParameters);
-
-// ISRs
-void __attribute__( (interrupt(ipl1),
-					 vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
-
-// hardware setup
+/*
+ * Set up the hardware ready to run this demo.
+ */
 static void prvSetupHardware( void );
-void PMP_init(void);
-void cn_interrupt_initialize(void);
 
-
-
-/* GLOBAL VARIABLES ========================================================= */
-
-static TaskHandle_t xTaskToNotify = NULL;
-static MessageBufferHandle_t temperature;
-
-
-
-/* TRACE STRINGS ============================================================ */
-    
+/* Simple Tasks that light a specific LED when running  */
+static void prvTestTask1( void *pvParameters );
+static void prvTestTask2( void *pvParameters );
+  
 #if ( configUSE_TRACE_FACILITY == 1 )
-    traceString led_state_trace;
-    traceString btn1_state_trace;
-    traceString ledb_trace;
+    traceString str;
 #endif
 
-
-
-
-/* MAIN ===================================================================== */
-
+/* main Function Description ***************************************
+ * SYNTAX:		int main( void );
+ * KEYWORDS:		Initialize, create, tasks, scheduler
+ * DESCRIPTION:         This is a typical RTOS set up function. Hardware is
+ * 			initialized, tasks are created, and the scheduler is
+ * 			started.
+ * PARAMETERS:		None
+ * RETURN VALUE:	Exit code - used for error handling
+ * NOTES:		All three buttons are polled using the same code
+ *                      for reading the buttons.
+ * END DESCRIPTION *****************************************************/
 int main( void )
 {
     prvSetupHardware();		/*  Configure hardware */
     
-    // initialize tracealyzer and start recording
     #if ( configUSE_TRACE_FACILITY == 1 )
-        vTraceEnable(TRC_START);
-        led_state_trace = xTraceRegisterString("LED state");
-        btn1_state_trace = xTraceRegisterString("BTN1 state");
-        ledb_trace = xTraceRegisterString("LEDB breakpoint");
+        vTraceEnable(TRC_START); // Initialize and start recording
+        str = xTraceRegisterString("Channel");
     #endif
 
-	temperature = xMessageBufferCreate(100);
+/* -----  NO FreeRTOS API calls BEFORE this line!!! ------------*/
+    
+/* Create the tasks then start the scheduler. */
 
-	if (temperature != NULL)
-	{
-		// create tasks and start scheduler
-		xTaskCreate(generateCNInt, "Generate CN Interrupt",
-					configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-		xTaskCreate(readAndSaveTemperature, "Read and Save Temperature",
-					configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL, 1,
-					NULL);
-		xTaskCreate(toggleLEDA, "Toggle LEDA", configMINIMAL_STACK_SIZE, NULL, 3,
-					NULL);
+    /* Create the tasks defined within this file. */
+    xTaskCreate( prvTestTask1, "Tst1", configMINIMAL_STACK_SIZE,
+                                    NULL, tskIDLE_PRIORITY, NULL );
+    xTaskCreate( prvTestTask2, "Tst2", configMINIMAL_STACK_SIZE,
+                                    NULL, tskIDLE_PRIORITY, NULL );
 
-		vTaskStartScheduler();
-	}
+    vTaskStartScheduler();	/*  Finally start the scheduler. */
 
-    // spin if there isn't enough memory for the heap or if message buffer
-	// creation fails
-	while (1)
-	{
-		// do nothing
-	}
+/* Will only reach here if there is insufficient heap available to start
+ *  the scheduler. */
+    return 0;
+}  /* End of main */
 
-    return 1;
-}
-
-
-
-/* TASK DEFINITIONS ========================================================= */
-
-static void generateCNInt(void* pvParameters)
+/* prvTestTask1 Function Description *****************************************
+ * SYNTAX:          static void prvTestTask1( void *pvParameters );
+ * KEYWORDS:        RTOS, Task
+ * DESCRIPTION:     If LEDA is not lit, all LEDs are turned off and LEDA is
+ *                  turned on. Increments a counter each time the task is
+ *                  resumed.
+ * PARAMETER 1:     void pointer - data of unspecified data type sent from
+ *                  RTOS scheduler
+ * RETURN VALUE:    None (There is no returning from this function)
+ * NOTES:           LEDA is switched on and LEDB switched off if LEDA was
+ *                  detected as off.
+ * END DESCRIPTION ************************************************************/
+static void prvTestTask1( void *pvParameters )
 {
-	const TickType_t period = 6 / portTICK_RATE_MS;
-	TickType_t lastWakeTime = xTaskGetTickCount();
+unsigned int counter = 0;
 
-	while (1)
-	{
-		INTSetFlag(INT_CN);
-		vTaskDelayUntil(&lastWakeTime, period);
-	}
-}
-
-static void readAndSaveTemperature(void* pvParameters)
-{
-	xTaskToNotify = xTaskGetCurrentTaskHandle();
-
-	while (1)
-	{
-		ulTaskNotifyTakeIndexed(0, pdTRUE, portMAX_DELAY);
-	}
-}
-
-static void printToLCD(void* pvParameters)
-{
-	char* temp_str;
-
-	while (1)
-	{
-
-	}
-}
-
-static void toggleLEDA(void* pvParameters)
-{
-	while (1)
+    for( ;; )
     {
-        LATBINV = LEDA;
-        vTaskDelay(3 / portTICK_RATE_MS);
-    }
-}
-
-
-
-/* INTERRUPT SERVICE ROUTINES =============================================== */
-
-void CN_ISR_handler(void)
-{
-    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
-    
-	if (xTaskToNotify != NULL)
+	if(!(LATB & LEDA))      /* Test for LEDA off */
 	{
-    	vTaskNotifyGiveIndexedFromISR(xTaskToNotify, 0, &xHigherPriorityTaskWoken);
+            LATBCLR = SM_LEDS;  /* Turn off all other LEDs */
+            LATBSET = LEDA;     /* Turn LEDA on */
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(str, "LEDA set on");
+            #endif
+            ++counter;          /* Increment task run counter */
 	}
-    
-    // clear interrupt flag
-    PORTRead(IOPORT_G);
-    mCNClearIntFlag();
-    
-    // switch context to higher priority task
-    portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
-}
+    }
+}  /* End of prvTestTask1 */
 
-
-
-
-/* SETUP FUNCTION DEFINITIONS =============================================== */
+/* prvTestTask2 Function Description *****************************************
+ * SYNTAX:          static void prvTestTask2( void *pvParameters );
+ * KEYWORDS:        RTOS, Task
+ * DESCRIPTION:     If LEDB is not lit, all LEDs are turned off and LEDB is
+ *                  turned on. Increments a counter each time the task is
+ *                  resumed.
+ * PARAMETER 1:     void pointer - data of unspecified data type sent from
+ *                  RTOS scheduler
+ * RETURN VALUE:    None (There is no returning from this function)
+ * NOTES:           LEDB is switched on and LEDA switched off if LEDB was
+ *                  detected as off.
+ * END DESCRIPTION ************************************************************/
+static void prvTestTask2( void *pvParameters )
+{
+unsigned int counter = 0;
+    for( ;; )
+    {
+	if(!(LATB & LEDB))      /* Test for LEDB off */
+	{
+            LATBCLR = SM_LEDS;  /* Turn off all other LEDs */
+            LATBSET = LEDB;     /* Turn LEDB on */
+            #if ( configUSE_TRACE_FACILITY == 1 )
+                vTracePrint(str, "LEDB set on");
+            #endif
+            ++counter;          /* Increment task run counter */
+	}
+    }
+}  /* End of prvTestTask2 */
 
 static void prvSetupHardware( void )
 {
-    // set up Cerebot components
     Cerebot_mx7cK_setup();
     
     /* Set up PmodSTEM LEDs */
     PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
     LATBCLR = SM_LEDS;                      /* Clear all SM LED bits */
+    LATBSET = LEDA;                         /* Turn on LEDA */
     
-    // enable CN interrupt
-    cn_interrupt_initialize();
-    
-    /* Enable multi-vector interrupts */
+/* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
     INTEnableInterrupts();   /*Do as needed for global interrupt control */
     portDISABLE_INTERRUPTS();
+    
+
 }
 
-void PMP_init(void)
-{
-    int cfg1 = PMP_ON | PMP_READ_WRITE_EN | PMP_READ_POL_HI | PMP_WRITE_POL_HI;
-    int cfg2 = PMP_DATA_BUS_8 | PMP_MODE_MASTER1 | PMP_WAIT_BEG_1 | 
-               PMP_WAIT_MID_2 | PMP_WAIT_END_1;
-    int cfg3 = PMP_PEN_0;        // only PMA0 enabled
-    int cfg4 = PMP_INT_OFF;      // no interrupts used
-    mPMPOpen(cfg1, cfg2, cfg3, cfg4);
-}
-
-void cn_interrupt_initialize(void)
-{
-    unsigned int dummy; // used to hold PORT read value
-    
-    // Enable CN for BTN1
-    mCNOpen(CN_ON, CN8_ENABLE, 0);
-    
-    // Set CN interrupts priority level 1 sub priority level 0
-    mCNSetIntPriority(2);       // Group priority (1 to 7)
-    mCNSetIntSubPriority(0);    // Subgroup priority (0 to 3)
-
-    // read port to clear difference
-    dummy = PORTReadBits(IOPORT_G, BTN1);
-    mCNClearIntFlag();          // Clear CN interrupt flag
-    mCNIntEnable(1);            // Enable CNinterrupts
-    
-    // Global interrupts must enabled to complete the initialization.
-}
-
-
-
-/* HOOK FUNCTION DEFINITIONS ================================================ */
+/*-----------------------------------------------------------*/
 
 void vApplicationMallocFailedHook( void )
 {
@@ -250,14 +175,6 @@ void vApplicationMallocFailedHook( void )
 }
 /*-----------------------------------------------------------*/
 
-/* vApplicationIdleHook Function Description ***********************************
- * SYNTAX:          void vApplicationIdleHook(void)
- * KEYWORDS:        LEDA, BTN1
- * DESCRIPTION:     Shows the state of BTN1 on LEDA.
- * RETURN VALUE:    None (There is no returning from this function)
- * NOTES:           Runs whenever no other task or ISR is running. Has a
- *                  priority of 0.
- * END DESCRIPTION ************************************************************/
 void vApplicationIdleHook( void )
 {
 	/* vApplicationIdleHook() will only be called if configUSE_IDLE_HOOK is set
@@ -269,38 +186,6 @@ void vApplicationIdleHook( void )
 	important that vApplicationIdleHook() is permitted to return to its calling
 	function, because it is the responsibility of the idle task to clean up
 	memory allocated by the kernel to any task that has since been deleted. */
-    
-    int count = 0;
-    
-    while (1)
-    {
-        count++;
-        
-        if (PORTReadBits(IOPORT_G, BTN1))
-        {
-            LATBSET = LEDA;
-            
-            #if ( configUSE_TRACE_FACILITY == 1 )
-                if (count >= 10)  // reduce frequency of messages
-                {
-                    vTracePrint(btn1_state_trace, "BTN1 down");
-                    count = 0;
-                }
-            #endif
-        }
-        else
-        {
-            LATBCLR = LEDA;
-            
-            #if ( configUSE_TRACE_FACILITY == 1 )
-                if (count >= 10)  // reduce frequency of messages
-                {
-                    vTracePrint(btn1_state_trace, "BTN1 up");
-                    count = 0;
-                }
-            #endif
-        }
-    }
 }
 /*-----------------------------------------------------------*/
 
