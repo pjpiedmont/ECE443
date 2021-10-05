@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.20 (MiKTeX 2.9.7140 64-bit) (preloaded format=pdflatex 2021.10.4)  4 OCT 2021 20:19
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (MiKTeX 2.9.7140 64-bit) (preloaded format=pdflatex 2021.10.4)  4 OCT 2021 20:22
 entering extended mode
 **./refman.tex
 (refman.tex
@@ -989,15 +989,30 @@ LaTeX Font Info:    Font shape `T1/phv/b/n' will be
 (Font)              scaled to size 22.39185pt on input line 170.
 LaTeX Font Info:    Font shape `T1/phv/bc/n' will be
 (Font)              scaled to size 22.39185pt on input line 170.
-(md__r_e_a_d_m_e.tex
-LaTeX Font Info:    Font shape `T1/phv/bx/n' in size <12> not available
+(files.tex
+LaTeX Font Info:    Font shape `T1/phv/bx/n' in size <14.4> not available
 (Font)              Font shape `T1/phv/b/n' tried instead on input line 1.
 LaTeX Font Info:    Font shape `T1/phv/b/n' will be
-(Font)              scaled to size 10.79993pt on input line 1.
+(Font)              scaled to size 12.9599pt on input line 1.
 
 
-Package hyperref Warning: Difference (2) between bookmark levels is greater 
-(hyperref)                than one, level fixed on input line 1.
+LaTeX Warning: Reference `_cerebot_m_x7c_k_8h' on page 1 undefined on input lin
+e 3.
+
+
+LaTeX Warning: Reference `config__bits_8h' on page 1 undefined on input line 4.
+
+
+
+LaTeX Warning: Reference `_free_r_t_o_s_config_8h' on page 1 undefined on input
+ line 5.
+
+
+LaTeX Warning: Reference `trc_config_8h' on page 1 undefined on input line 11.
+
+
+LaTeX Warning: Reference `trc_snapshot_config_8h' on page 1 undefined on input 
+line 12.
 
 ) [1
 
@@ -1006,35 +1021,6 @@ Package hyperref Warning: Difference (2) between bookmark levels is greater
 
 ]
 Chapter 2.
-(files.tex
-LaTeX Font Info:    Font shape `T1/phv/bx/n' in size <14.4> not available
-(Font)              Font shape `T1/phv/b/n' tried instead on input line 1.
-LaTeX Font Info:    Font shape `T1/phv/b/n' will be
-(Font)              scaled to size 12.9599pt on input line 1.
-
-
-LaTeX Warning: Reference `_cerebot_m_x7c_k_8h' on page 3 undefined on input lin
-e 3.
-
-
-LaTeX Warning: Reference `config__bits_8h' on page 3 undefined on input line 4.
-
-
-
-LaTeX Warning: Reference `_free_r_t_o_s_config_8h' on page 3 undefined on input
- line 5.
-
-
-LaTeX Warning: Reference `trc_config_8h' on page 3 undefined on input line 11.
-
-
-LaTeX Warning: Reference `trc_snapshot_config_8h' on page 3 undefined on input 
-line 12.
-
-) [3] [4
-
-]
-Chapter 3.
 (_i_rlib_8c.tex
 LaTeX Font Info:    Try loading font information for T1+pcr on input line 8.
  ("C:\Program Files\MiKTeX 2.9\tex/latex/psnfss\t1pcr.fd"
@@ -1044,6 +1030,10 @@ Underfull \hbox (badness 10000) in paragraph at lines 8--12
 
  []
 
+LaTeX Font Info:    Font shape `T1/phv/bx/n' in size <12> not available
+(Font)              Font shape `T1/phv/b/n' tried instead on input line 12.
+LaTeX Font Info:    Font shape `T1/phv/b/n' will be
+(Font)              scaled to size 10.79993pt on input line 12.
 LaTeX Font Info:    Try loading font information for TS1+phv on input line 15.
 ("C:\Program Files\MiKTeX 2.9\tex/latex/psnfss\ts1phv.fd"
 File: ts1phv.fd 2001/06/04 scalable font definitions for TS1/phv.
@@ -1078,7 +1068,7 @@ LaTeX Font Info:    Font shape `T1/pcr/m/it' in size <8> not available
 (Font)              Font shape `T1/pcr/m/sl' tried instead on input line 35.
 LaTeX Font Info:    Font shape `T1/pcr/m/it' in size <7> not available
 (Font)              Font shape `T1/pcr/m/sl' tried instead on input line 35.
-[5]
+[3]
 Underfull \hbox (badness 10000) detected at line 52
 [][][]
  []
@@ -1093,7 +1083,7 @@ Underfull \hbox (badness 10000) detected at line 21
 [][][]
  []
 
-[6]
+[4]
 Underfull \hbox (badness 10000) detected at line 48
 [][][]
  []
@@ -1112,7 +1102,7 @@ Underfull \hbox (badness 10000) detected at line 40
 [][][]
  []
 
-[7]
+[5]
 Underfull \hbox (badness 10000) detected at line 43
 [][][]
  []
@@ -1127,7 +1117,7 @@ Underfull \hbox (badness 10000) detected at line 72
 [][][]
  []
 
-[8]
+[6]
 Underfull \hbox (badness 10000) detected at line 90
 [][][]
  []
@@ -1142,7 +1132,7 @@ Underfull \hbox (badness 10000) detected at line 121
 [][][]
  []
 
-[9]
+[7]
 Underfull \hbox (badness 10000) detected at line 140
 [][][]
  []
@@ -1157,7 +1147,7 @@ Underfull \hbox (badness 10000) detected at line 178
 [][][]
  []
 
-[10]
+[8]
 Underfull \hbox (badness 10000) detected at line 196
 [][][]
  []
@@ -1167,7 +1157,7 @@ Underfull \hbox (badness 10000) detected at line 216
 [][][]
  []
 
-) (_l_c_dlib_8h.tex [11]
+) (_l_c_dlib_8h.tex [9]
 Underfull \hbox (badness 10000) detected at line 37
 [][][]
  []
@@ -1187,7 +1177,7 @@ Underfull \hbox (badness 10000) detected at line 69
 [][][]
  []
 
-[12]
+[10]
 Underfull \hbox (badness 10000) detected at line 87
 [][][]
  []
@@ -1197,7 +1187,7 @@ Underfull \hbox (badness 10000) detected at line 105
 [][][]
  []
 
-[13]
+[11]
 Underfull \hbox (badness 10000) detected at line 118
 [][][]
  []
@@ -1212,7 +1202,7 @@ Underfull \hbox (badness 10000) detected at line 155
 [][][]
  []
 
-[14]
+[12]
 Underfull \hbox (badness 10000) detected at line 175
 [][][]
  []
@@ -1225,7 +1215,7 @@ Underfull \hbox (badness 10000) detected at line 193
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [15]
+ [13]
 Underfull \hbox (badness 10000) detected at line 213
 [][][]
  []
@@ -1235,7 +1225,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 8--18
 
  []
 
-[16]
+[14]
 Underfull \hbox (badness 10000) detected at line 81
 [][][]
  []
@@ -1255,7 +1245,7 @@ Underfull \hbox (badness 10000) detected at line 113
 [][][]
  []
 
-[17]
+[15]
 Underfull \hbox (badness 10000) detected at line 131
 [][][]
  []
@@ -1275,7 +1265,7 @@ Underfull \hbox (badness 10000) detected at line 175
 [][][]
  []
 
-[18]
+[16]
 Underfull \hbox (badness 10000) detected at line 193
 [][][]
  []
@@ -1285,29 +1275,29 @@ Underfull \hbox (badness 10000) detected at line 211
 [][][]
  []
 
-) [19] [20
+) [17] [18
 
-] (refman.ind [21
+] (refman.ind [19
 
 
 ])
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 192.
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 192.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 188.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 188.
  (refman.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 192.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 192.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 188.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 188.
 Package rerunfilecheck Info: File `refman.out' has not changed.
-(rerunfilecheck)             Checksum: 144BDF1E7B4ACEA1D5E2E7C3D4E266AB;9568.
+(rerunfilecheck)             Checksum: 835C55E40EFBF0077410371563414197;9174.
 
 
 LaTeX Warning: There were undefined references.
 
  ) 
 Here is how much of TeX's memory you used:
- 16904 strings out of 492895
- 249552 string characters out of 3133470
- 356752 words of memory out of 3000000
- 20387 multiletter control sequences out of 15000+200000
+ 16887 strings out of 492895
+ 249170 string characters out of 3133470
+ 356173 words of memory out of 3000000
+ 20381 multiletter control sequences out of 15000+200000
  61304 words of font info for 83 fonts, out of 3000000 for 9000
  1141 hyphenation exceptions out of 8191
  53i,16n,93p,944b,635s stack positions out of 5000i,500n,10000p,200000b,50000s
@@ -1320,9 +1310,9 @@ courier/ucrr8a.pfb><C:/Program Files/MiKTeX 2.9/fonts/type1/urw/courier/ucrro8a
 am Files/MiKTeX 2.9/fonts/type1/urw/helvetic/uhvb8ac.pfb><C:/Program Files/MiKT
 eX 2.9/fonts/type1/urw/helvetic/uhvr8a.pfb><C:/Program Files/MiKTeX 2.9/fonts/t
 ype1/urw/helvetic/uhvro8a.pfb>
-Output written on refman.pdf (25 pages, 192367 bytes).
+Output written on refman.pdf (23 pages, 186979 bytes).
 PDF statistics:
- 617 PDF objects out of 1000 (max. 8388607)
- 150 named destinations out of 1000 (max. 500000)
- 417 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 588 PDF objects out of 1000 (max. 8388607)
+ 142 named destinations out of 1000 (max. 500000)
+ 393 words of extra memory for PDF output out of 10000 (max. 10000000)
 

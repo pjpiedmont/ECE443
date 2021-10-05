@@ -23,7 +23,6 @@ for the JavaScript code in this file
 var NAVTREE =
 [
   [ "pied5544_443_p4", "index.html", [
-    [ "Project 3", "md__r_e_a_d_m_e.html", null ],
     [ "Files", "files.html", [
       [ "File List", "files.html", "files_dup" ],
       [ "Globals", "globals.html", [

@@ -1,7 +1,5 @@
 var files_dup =
 [
-    [ "Author", "md__r_e_a_d_m_e.html#autotoc_md1", null ],
-    [ "Date Created", "md__r_e_a_d_m_e.html#autotoc_md2", null ],
     [ "CerebotMX7cK.h", "_cerebot_m_x7c_k_8h_source.html", null ],
     [ "config_bits.h", "config__bits_8h_source.html", null ],
     [ "FreeRTOSConfig.h", "_free_r_t_o_s_config_8h_source.html", null ],
