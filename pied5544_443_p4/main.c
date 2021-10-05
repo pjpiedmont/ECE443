@@ -82,6 +82,7 @@ static MessageBufferHandle_t tempBuffer = NULL;
 /* TRACE STRINGS ============================================================ */
     
 #if ( configUSE_TRACE_FACILITY == 1 )
+    traceString cn_intgen_trace;
     traceString cn_isr_trace;
 	traceString heartbeat_trace;
 	traceString read_and_save_trace;
@@ -100,6 +101,7 @@ int main( void )
     // initialize tracealyzer and start recording
     #if ( configUSE_TRACE_FACILITY == 1 )
         vTraceEnable(TRC_START);
+        cn_intgen_trace = xTraceRegisterString("CN Int Gen");
         cn_isr_trace = xTraceRegisterString("CN ISR");
 		heartbeat_trace = xTraceRegisterString("Heartbeat");
 		read_and_save_trace = xTraceRegisterString("Read & Save");
@@ -108,7 +110,7 @@ int main( void )
     #endif
 
     LCD_init();
-    tempBuffer = xMessageBufferCreate(24);
+    tempBuffer = xMessageBufferCreate(8);
 
 	if (tempBuffer != NULL)
 	{
@@ -158,7 +160,12 @@ static void generateCNInt(void* pvParameters)
 
 	while (1)
 	{
-		INTSetFlag(INT_CN);
+        #if ( configUSE_TRACE_FACILITY == 1 )
+			vTracePrint(cn_intgen_trace, "Generating CN interrupt");
+		#endif
+		
+        INTSetFlag(INT_CN);
+
 		vTaskDelayUntil(&lastWakeTime, period);
 	}
 }
@@ -180,10 +187,11 @@ static void readAndSaveTemperature(void* pvParameters)
     uint8_t ir_data[3];
     const int data_len = 3;
     
-	// used to calculate temperature in deg C
+	// used to calculate temperature in deg F
     uint16_t temp_2_bytes;
     float kelvin;
     float celsius;
+    float fahrenheit;
     char temp_str[20];
     
     int i = 0;
@@ -227,14 +235,15 @@ static void readAndSaveTemperature(void* pvParameters)
         // calculate temperature
         if (temp_2_bytes > 0x7fff)  // sensor error
         {
-            sprintf(temp_str, "Temp = xxx.xx C");
+            sprintf(temp_str, "Temp = xxx.xx F");
         }
         else
         {
-			// convert temp from binary to deg C
+			// convert temp from binary to deg F
             kelvin = temp_2_bytes * 0.02f;
             celsius = kelvin - 273.15f;
-            sprintf(temp_str, "Temp = %3.2f C", celsius);
+            fahrenheit = (celsius * (9.0f/5.0f)) + 32;
+            sprintf(temp_str, "Temp = %3.2f F", fahrenheit);
         }
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
@@ -249,7 +258,7 @@ static void readAndSaveTemperature(void* pvParameters)
 			vTracePrint(read_and_save_trace, "Sent to message buffer");
 		#endif
         
-        if (xBytesSent != sizeof(char*))
+        if (xBytesSent != 4)
         {
             #if ( configUSE_TRACE_FACILITY == 1 )
 				vTracePrint(error_trace, "Incorrect number of bytes written\
@@ -302,13 +311,13 @@ static void printToLCD(void* pvParameters)
 
 		LCD_clear();
 		LCD_puts(temp_str);
-        
-        // LCD is illegible if it updates too quickly
-        vTaskDelay(100 / portTICK_RATE_MS);
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Printed to LCD");
 		#endif
+        
+        // LCD is illegible if it updates too quickly
+        vTaskDelay(100 / portTICK_RATE_MS);
 	}
 }
 
