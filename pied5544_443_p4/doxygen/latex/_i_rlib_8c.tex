@@ -1,0 +1,54 @@
+\hypertarget{_i_rlib_8c}{}\doxysection{I\+Rlib.\+c File Reference}
+\label{_i_rlib_8c}\index{IRlib.c@{IRlib.c}}
+
+
+Contains functions to communicate with the S\+M\+Bus IR sensor.  
+
+
+{\ttfamily \#include $<$plib.\+h$>$}\newline
+{\ttfamily \#include \char`\"{}Cerebot\+M\+X7c\+K.\+h\char`\"{}}\newline
+{\ttfamily \#include $<$stdint.\+h$>$}\newline
+{\ttfamily \#include \char`\"{}I\+Rlib.\+h\char`\"{}}\newline
+\doxysubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+int \mbox{\hyperlink{_i_rlib_8c_ac47cb0bec89d606ef968b496f3c989e5}{I2\+C1\+\_\+\+I\+R\+\_\+\+Read}} (uint8\+\_\+t slave\+\_\+addr, uint8\+\_\+t command, uint8\+\_\+t $\ast$data, int data\+\_\+len)
+\begin{DoxyCompactList}\small\item\em Reads from the IR sensor using S\+M\+Bus. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Contains functions to communicate with the S\+M\+Bus IR sensor. 
+
+\begin{DoxyAuthor}{Author}
+Parker Piedmont
+\end{DoxyAuthor}
+\begin{DoxyDate}{Date}
+04 Oct 2021 
+\end{DoxyDate}
+
+
+\doxysubsection{Function Documentation}
+\mbox{\Hypertarget{_i_rlib_8c_ac47cb0bec89d606ef968b496f3c989e5}\label{_i_rlib_8c_ac47cb0bec89d606ef968b496f3c989e5}} 
+\index{IRlib.c@{IRlib.c}!I2C1\_IR\_Read@{I2C1\_IR\_Read}}
+\index{I2C1\_IR\_Read@{I2C1\_IR\_Read}!IRlib.c@{IRlib.c}}
+\doxysubsubsection{\texorpdfstring{I2C1\_IR\_Read()}{I2C1\_IR\_Read()}}
+{\footnotesize\ttfamily int I2\+C1\+\_\+\+I\+R\+\_\+\+Read (\begin{DoxyParamCaption}\item[{uint8\+\_\+t}]{slave\+\_\+addr,  }\item[{uint8\+\_\+t}]{command,  }\item[{uint8\+\_\+t $\ast$}]{data,  }\item[{int}]{data\+\_\+len }\end{DoxyParamCaption})}
+
+
+
+Reads from the IR sensor using S\+M\+Bus. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em slave\+\_\+addr} & Slave address of the IR sensor \\
+\hline
+\mbox{\texttt{ in}}  & {\em command} & Instructions sent to sensor \\
+\hline
+\mbox{\texttt{ out}}  & {\em data} & Data read from sensor \\
+\hline
+\mbox{\texttt{ in}}  & {\em data\+\_\+len} & Number of bytes to read\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Whether an error occurred 
+\end{DoxyReturn}

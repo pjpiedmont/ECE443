@@ -1,0 +1,53 @@
+\@ifundefined {etoctocstyle}{\let \etoc@startlocaltoc \@gobble \let \etoc@settocdepth \@gobble \let \etoc@depthtag \@gobble \let \etoc@setlocaltop \@gobble }{}
+\contentsline {chapter}{\numberline {1}Project 3}{1}{chapter.1}% 
+\contentsline {subsection}{\numberline {1.0.1}Author}{1}{subsection.1.0.1}% 
+\contentsline {subsection}{\numberline {1.0.2}Date Created}{1}{subsection.1.0.2}% 
+\contentsline {chapter}{\numberline {2}File Index}{3}{chapter.2}% 
+\contentsline {section}{\numberline {2.1}File List}{3}{section.2.1}% 
+\contentsline {chapter}{\numberline {3}File Documentation}{5}{chapter.3}% 
+\contentsline {section}{\numberline {3.1}I\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}Rlib.\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}c File Reference}{5}{section.3.1}% 
+\contentsline {subsection}{\numberline {3.1.1}Detailed Description}{5}{subsection.3.1.1}% 
+\contentsline {subsection}{\numberline {3.1.2}Function Documentation}{5}{subsection.3.1.2}% 
+\contentsline {subsubsection}{\numberline {3.1.2.1}I2C1\_IR\_Read()}{5}{subsubsection.3.1.2.1}% 
+\contentsline {section}{\numberline {3.2}I\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}Rlib.\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}h File Reference}{6}{section.3.2}% 
+\contentsline {subsection}{\numberline {3.2.1}Detailed Description}{6}{subsection.3.2.1}% 
+\contentsline {subsection}{\numberline {3.2.2}Function Documentation}{6}{subsection.3.2.2}% 
+\contentsline {subsubsection}{\numberline {3.2.2.1}I2C1\_IR\_Read()}{6}{subsubsection.3.2.2.1}% 
+\contentsline {section}{\numberline {3.3}L\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}C\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}Dlib.\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}c File Reference}{7}{section.3.3}% 
+\contentsline {subsection}{\numberline {3.3.1}Detailed Description}{8}{subsection.3.3.1}% 
+\contentsline {subsection}{\numberline {3.3.2}Function Documentation}{8}{subsection.3.3.2}% 
+\contentsline {subsubsection}{\numberline {3.3.2.1}busyLCD()}{8}{subsubsection.3.3.2.1}% 
+\contentsline {subsubsection}{\numberline {3.3.2.2}LCD\_clear()}{8}{subsubsection.3.3.2.2}% 
+\contentsline {subsubsection}{\numberline {3.3.2.3}LCD\_clearline()}{8}{subsubsection.3.3.2.3}% 
+\contentsline {subsubsection}{\numberline {3.3.2.4}LCD\_delay()}{9}{subsubsection.3.3.2.4}% 
+\contentsline {subsubsection}{\numberline {3.3.2.5}LCD\_init()}{9}{subsubsection.3.3.2.5}% 
+\contentsline {subsubsection}{\numberline {3.3.2.6}LCD\_putc()}{9}{subsubsection.3.3.2.6}% 
+\contentsline {subsubsection}{\numberline {3.3.2.7}LCD\_puts()}{10}{subsubsection.3.3.2.7}% 
+\contentsline {subsubsection}{\numberline {3.3.2.8}LCD\_set\_cursor\_pos()}{10}{subsubsection.3.3.2.8}% 
+\contentsline {subsubsection}{\numberline {3.3.2.9}readLCD()}{11}{subsubsection.3.3.2.9}% 
+\contentsline {subsubsection}{\numberline {3.3.2.10}writeLCD()}{11}{subsubsection.3.3.2.10}% 
+\contentsline {section}{\numberline {3.4}L\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}C\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}Dlib.\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}h File Reference}{11}{section.3.4}% 
+\contentsline {subsection}{\numberline {3.4.1}Detailed Description}{12}{subsection.3.4.1}% 
+\contentsline {subsection}{\numberline {3.4.2}Function Documentation}{12}{subsection.3.4.2}% 
+\contentsline {subsubsection}{\numberline {3.4.2.1}busyLCD()}{12}{subsubsection.3.4.2.1}% 
+\contentsline {subsubsection}{\numberline {3.4.2.2}LCD\_clear()}{13}{subsubsection.3.4.2.2}% 
+\contentsline {subsubsection}{\numberline {3.4.2.3}LCD\_clearline()}{13}{subsubsection.3.4.2.3}% 
+\contentsline {subsubsection}{\numberline {3.4.2.4}LCD\_delay()}{13}{subsubsection.3.4.2.4}% 
+\contentsline {subsubsection}{\numberline {3.4.2.5}LCD\_init()}{14}{subsubsection.3.4.2.5}% 
+\contentsline {subsubsection}{\numberline {3.4.2.6}LCD\_putc()}{14}{subsubsection.3.4.2.6}% 
+\contentsline {subsubsection}{\numberline {3.4.2.7}LCD\_puts()}{14}{subsubsection.3.4.2.7}% 
+\contentsline {subsubsection}{\numberline {3.4.2.8}LCD\_set\_cursor\_pos()}{15}{subsubsection.3.4.2.8}% 
+\contentsline {subsubsection}{\numberline {3.4.2.9}readLCD()}{15}{subsubsection.3.4.2.9}% 
+\contentsline {subsubsection}{\numberline {3.4.2.10}writeLCD()}{15}{subsubsection.3.4.2.10}% 
+\contentsline {section}{\numberline {3.5}main.\discretionary {\unhbox \voidb@x \hbox {\relax \fontsize {7}{8}\selectfont $\leftarrow \joinrel \rhook $}}{}{}c File Reference}{16}{section.3.5}% 
+\contentsline {subsection}{\numberline {3.5.1}Detailed Description}{17}{subsection.3.5.1}% 
+\contentsline {subsection}{\numberline {3.5.2}Function Documentation}{17}{subsection.3.5.2}% 
+\contentsline {subsubsection}{\numberline {3.5.2.1}cn\_interrupt\_initialize()}{17}{subsubsection.3.5.2.1}% 
+\contentsline {subsubsection}{\numberline {3.5.2.2}CN\_ISR\_handler()}{17}{subsubsection.3.5.2.2}% 
+\contentsline {subsubsection}{\numberline {3.5.2.3}generateCNInt()}{17}{subsubsection.3.5.2.3}% 
+\contentsline {subsubsection}{\numberline {3.5.2.4}PMP\_init()}{18}{subsubsection.3.5.2.4}% 
+\contentsline {subsubsection}{\numberline {3.5.2.5}printToLCD()}{18}{subsubsection.3.5.2.5}% 
+\contentsline {subsubsection}{\numberline {3.5.2.6}prvSetupHardware()}{18}{subsubsection.3.5.2.6}% 
+\contentsline {subsubsection}{\numberline {3.5.2.7}readAndSaveTemperature()}{19}{subsubsection.3.5.2.7}% 
+\contentsline {subsubsection}{\numberline {3.5.2.8}toggleLEDA()}{19}{subsubsection.3.5.2.8}% 
+\contentsline {chapter}{Index}{21}{section*.8}% 

@@ -1,0 +1,115 @@
+\begin{theindex}
+
+  \item {busyLCD}
+    \subitem {LCDlib.c}, \hyperpage{8}
+    \subitem {LCDlib.h}, \hyperpage{12}
+
+  \indexspace
+
+  \item {cn\_interrupt\_initialize}
+    \subitem {main.c}, \hyperpage{17}
+  \item {CN\_ISR\_handler}
+    \subitem {main.c}, \hyperpage{17}
+
+  \indexspace
+
+  \item {generateCNInt}
+    \subitem {main.c}, \hyperpage{17}
+
+  \indexspace
+
+  \item {I2C1\_IR\_Read}
+    \subitem {IRlib.c}, \hyperpage{5}
+    \subitem {IRlib.h}, \hyperpage{6}
+  \item {IRlib.c}, \hyperpage{5}
+    \subitem {I2C1\_IR\_Read}, \hyperpage{5}
+  \item {IRlib.h}, \hyperpage{6}
+    \subitem {I2C1\_IR\_Read}, \hyperpage{6}
+
+  \indexspace
+
+  \item {LCD\_clear}
+    \subitem {LCDlib.c}, \hyperpage{8}
+    \subitem {LCDlib.h}, \hyperpage{12}
+  \item {LCD\_clearline}
+    \subitem {LCDlib.c}, \hyperpage{8}
+    \subitem {LCDlib.h}, \hyperpage{13}
+  \item {LCD\_delay}
+    \subitem {LCDlib.c}, \hyperpage{9}
+    \subitem {LCDlib.h}, \hyperpage{13}
+  \item {LCD\_init}
+    \subitem {LCDlib.c}, \hyperpage{9}
+    \subitem {LCDlib.h}, \hyperpage{13}
+  \item {LCD\_putc}
+    \subitem {LCDlib.c}, \hyperpage{9}
+    \subitem {LCDlib.h}, \hyperpage{14}
+  \item {LCD\_puts}
+    \subitem {LCDlib.c}, \hyperpage{10}
+    \subitem {LCDlib.h}, \hyperpage{14}
+  \item {LCD\_set\_cursor\_pos}
+    \subitem {LCDlib.c}, \hyperpage{10}
+    \subitem {LCDlib.h}, \hyperpage{14}
+  \item {LCDlib.c}, \hyperpage{7}
+    \subitem {busyLCD}, \hyperpage{8}
+    \subitem {LCD\_clear}, \hyperpage{8}
+    \subitem {LCD\_clearline}, \hyperpage{8}
+    \subitem {LCD\_delay}, \hyperpage{9}
+    \subitem {LCD\_init}, \hyperpage{9}
+    \subitem {LCD\_putc}, \hyperpage{9}
+    \subitem {LCD\_puts}, \hyperpage{10}
+    \subitem {LCD\_set\_cursor\_pos}, \hyperpage{10}
+    \subitem {readLCD}, \hyperpage{10}
+    \subitem {writeLCD}, \hyperpage{11}
+  \item {LCDlib.h}, \hyperpage{11}
+    \subitem {busyLCD}, \hyperpage{12}
+    \subitem {LCD\_clear}, \hyperpage{12}
+    \subitem {LCD\_clearline}, \hyperpage{13}
+    \subitem {LCD\_delay}, \hyperpage{13}
+    \subitem {LCD\_init}, \hyperpage{13}
+    \subitem {LCD\_putc}, \hyperpage{14}
+    \subitem {LCD\_puts}, \hyperpage{14}
+    \subitem {LCD\_set\_cursor\_pos}, \hyperpage{14}
+    \subitem {readLCD}, \hyperpage{15}
+    \subitem {writeLCD}, \hyperpage{15}
+
+  \indexspace
+
+  \item {main.c}, \hyperpage{16}
+    \subitem {cn\_interrupt\_initialize}, \hyperpage{17}
+    \subitem {CN\_ISR\_handler}, \hyperpage{17}
+    \subitem {generateCNInt}, \hyperpage{17}
+    \subitem {PMP\_init}, \hyperpage{18}
+    \subitem {printToLCD}, \hyperpage{18}
+    \subitem {prvSetupHardware}, \hyperpage{18}
+    \subitem {readAndSaveTemperature}, \hyperpage{18}
+    \subitem {toggleLEDA}, \hyperpage{19}
+
+  \indexspace
+
+  \item {PMP\_init}
+    \subitem {main.c}, \hyperpage{18}
+  \item {printToLCD}
+    \subitem {main.c}, \hyperpage{18}
+  \item {prvSetupHardware}
+    \subitem {main.c}, \hyperpage{18}
+
+  \indexspace
+
+  \item {readAndSaveTemperature}
+    \subitem {main.c}, \hyperpage{18}
+  \item {readLCD}
+    \subitem {LCDlib.c}, \hyperpage{10}
+    \subitem {LCDlib.h}, \hyperpage{15}
+
+  \indexspace
+
+  \item {toggleLEDA}
+    \subitem {main.c}, \hyperpage{19}
+
+  \indexspace
+
+  \item {writeLCD}
+    \subitem {LCDlib.c}, \hyperpage{11}
+    \subitem {LCDlib.h}, \hyperpage{15}
+
+\end{theindex}

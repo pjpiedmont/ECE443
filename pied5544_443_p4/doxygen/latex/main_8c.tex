@@ -1,0 +1,213 @@
+\hypertarget{main_8c}{}\doxysection{main.\+c File Reference}
+\label{main_8c}\index{main.c@{main.c}}
+
+
+Main program file for E\+CE 443 Project 4 using Free\+R\+T\+OS V202104.\+00.  
+
+
+{\ttfamily \#include \char`\"{}Free\+R\+T\+O\+S.\+h\char`\"{}}\newline
+{\ttfamily \#include \char`\"{}task.\+h\char`\"{}}\newline
+{\ttfamily \#include \char`\"{}stream\+\_\+buffer.\+h\char`\"{}}\newline
+{\ttfamily \#include \char`\"{}message\+\_\+buffer.\+h\char`\"{}}\newline
+{\ttfamily \#include \char`\"{}Cerebot\+M\+X7c\+K.\+h\char`\"{}}\newline
+{\ttfamily \#include $<$plib.\+h$>$}\newline
+{\ttfamily \#include $<$stdio.\+h$>$}\newline
+{\ttfamily \#include $<$stdint.\+h$>$}\newline
+{\ttfamily \#include \char`\"{}L\+C\+Dlib.\+h\char`\"{}}\newline
+{\ttfamily \#include \char`\"{}I\+Rlib.\+h\char`\"{}}\newline
+\doxysubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\Hypertarget{main_8c_a334c1356705c483c94503c26e00efe64}\label{main_8c_a334c1356705c483c94503c26e00efe64}} 
+\#define {\bfseries F\+S\+CK}~80000
+\end{DoxyCompactItemize}
+\doxysubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+static void \mbox{\hyperlink{main_8c_a295b01b9642c17471ed7b164c2afaaf1}{generate\+C\+N\+Int}} (void $\ast$pv\+Parameters)
+\begin{DoxyCompactList}\small\item\em Generates a virtual change notice interrupt every 6 ms by setting the CN interrupt flag. \end{DoxyCompactList}\item 
+static void \mbox{\hyperlink{main_8c_adfb51882daf4fc9e79ae6797e6e06a05}{read\+And\+Save\+Temperature}} (void $\ast$pv\+Parameters)
+\begin{DoxyCompactList}\small\item\em Reads the temperature from an IR sensor using S\+M\+Bus and sends it to a message buffer. \end{DoxyCompactList}\item 
+static void \mbox{\hyperlink{main_8c_a2b66e78648cfdc6d2f1cacf6c2635e01}{print\+To\+L\+CD}} (void $\ast$pv\+Parameters)
+\begin{DoxyCompactList}\small\item\em Reads the temperature from a message buffer and prints it to an L\+CD. Temperature is passed using a string pointer. \end{DoxyCompactList}\item 
+static void \mbox{\hyperlink{main_8c_a69a37109e92ee37ae74c9b0efb150258}{toggle\+L\+E\+DA}} (void $\ast$pv\+Parameters)
+\begin{DoxyCompactList}\small\item\em Toggles L\+E\+DA every 3 ms. \end{DoxyCompactList}\item 
+\mbox{\Hypertarget{main_8c_a4ae502d4e5fa59dd20d74f5d5d19fd6d}\label{main_8c_a4ae502d4e5fa59dd20d74f5d5d19fd6d}} 
+{\bfseries void} ((interrupt(ipl2), vector(\+\_\+\+C\+H\+A\+N\+G\+E\+\_\+\+N\+O\+T\+I\+C\+E\+\_\+\+V\+E\+C\+T\+OR)))
+\item 
+void \mbox{\hyperlink{main_8c_a91a04f12482f4ecafb9a193cc2e2a1d5}{C\+N\+\_\+\+I\+S\+R\+\_\+handler}} (void)
+\begin{DoxyCompactList}\small\item\em Unblocks read\+And\+Save\+Temperature when the CN interrupt is triggered. \end{DoxyCompactList}\item 
+static void \mbox{\hyperlink{main_8c_a464ac1a014942c092b752b720c4ff294}{prv\+Setup\+Hardware}} (void)
+\begin{DoxyCompactList}\small\item\em Configures the P\+I\+C32 hardware to support the operations performed by this project. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{main_8c_a8fd7442c17937e3c6b5ecb76b69bb12e}{P\+M\+P\+\_\+init}} (void)
+\begin{DoxyCompactList}\small\item\em Configures the parallel master port to communicate with the L\+CD. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{main_8c_a3571cef583e724ee110786486a9a7fa3}{cn\+\_\+interrupt\+\_\+initialize}} (void)
+\begin{DoxyCompactList}\small\item\em Enables the CN interrupt on B\+T\+N1 at priority level 2. \end{DoxyCompactList}\item 
+\mbox{\Hypertarget{main_8c_ab7e5c95cf72a3f819bc4462a7fb62ca3}\label{main_8c_ab7e5c95cf72a3f819bc4462a7fb62ca3}} 
+void {\bfseries v\+Application\+Malloc\+Failed\+Hook} (void)
+\item 
+\mbox{\Hypertarget{main_8c_a97fd430f36f8b065226e2bff9bad1de5}\label{main_8c_a97fd430f36f8b065226e2bff9bad1de5}} 
+void {\bfseries v\+Application\+Idle\+Hook} (void)
+\item 
+\mbox{\Hypertarget{main_8c_a306672a74bdd13ce210c05fca3385c59}\label{main_8c_a306672a74bdd13ce210c05fca3385c59}} 
+void {\bfseries v\+Application\+Stack\+Overflow\+Hook} (Task\+Handle\+\_\+t px\+Task, char $\ast$pc\+Task\+Name)
+\item 
+\mbox{\Hypertarget{main_8c_a9ca051aa77e17583aa5a85d5de5c199a}\label{main_8c_a9ca051aa77e17583aa5a85d5de5c199a}} 
+void {\bfseries v\+Application\+Tick\+Hook} (void)
+\item 
+\mbox{\Hypertarget{main_8c_a613f73ee2befbcc547744d6746666c81}\label{main_8c_a613f73ee2befbcc547744d6746666c81}} 
+void {\bfseries \+\_\+general\+\_\+exception\+\_\+handler} (unsigned long ul\+Cause, unsigned long ul\+Status)
+\item 
+\mbox{\Hypertarget{main_8c_a68ef99acadce6ddf7c6976ef0fbbb293}\label{main_8c_a68ef99acadce6ddf7c6976ef0fbbb293}} 
+void {\bfseries v\+Assert\+Called} (const char $\ast$pc\+File, unsigned long ul\+Line)
+\end{DoxyCompactItemize}
+\doxysubsection*{Variables}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\Hypertarget{main_8c_a3a16475f18ea84a8d06051ccb1840775}\label{main_8c_a3a16475f18ea84a8d06051ccb1840775}} 
+const int {\bfseries B\+R\+G\+\_\+\+V\+AL} = ((F\+PB / 2 / F\+S\+CK) -\/ 2)
+\item 
+\mbox{\Hypertarget{main_8c_a5902db22631c81bb6b7b045636c82b99}\label{main_8c_a5902db22631c81bb6b7b045636c82b99}} 
+const uint8\+\_\+t {\bfseries S\+L\+A\+V\+E\+\_\+\+A\+D\+D\+R\+E\+SS} = 0x5A
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Main program file for E\+CE 443 Project 4 using Free\+R\+T\+OS V202104.\+00. 
+
+~\newline
+ Demonstrates the use of S\+M\+Bus, direct task notifications, and message buffers. Simulates a change notice interrupt every 6 ms, unblocking a task that reads from an IR sensor over S\+M\+Bus. Calculates the temperature and sends it through a message buffer to a task that prints it to the L\+CD.
+
+\begin{DoxyAuthor}{Author}
+Parker Piedmont
+\end{DoxyAuthor}
+\begin{DoxyDate}{Date}
+04 Oct 2021 
+\end{DoxyDate}
+
+
+\doxysubsection{Function Documentation}
+\mbox{\Hypertarget{main_8c_a3571cef583e724ee110786486a9a7fa3}\label{main_8c_a3571cef583e724ee110786486a9a7fa3}} 
+\index{main.c@{main.c}!cn\_interrupt\_initialize@{cn\_interrupt\_initialize}}
+\index{cn\_interrupt\_initialize@{cn\_interrupt\_initialize}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{cn\_interrupt\_initialize()}{cn\_interrupt\_initialize()}}
+{\footnotesize\ttfamily void cn\+\_\+interrupt\+\_\+initialize (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})}
+
+
+
+Enables the CN interrupt on B\+T\+N1 at priority level 2. 
+
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_a91a04f12482f4ecafb9a193cc2e2a1d5}\label{main_8c_a91a04f12482f4ecafb9a193cc2e2a1d5}} 
+\index{main.c@{main.c}!CN\_ISR\_handler@{CN\_ISR\_handler}}
+\index{CN\_ISR\_handler@{CN\_ISR\_handler}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{CN\_ISR\_handler()}{CN\_ISR\_handler()}}
+{\footnotesize\ttfamily void C\+N\+\_\+\+I\+S\+R\+\_\+handler (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})}
+
+
+
+Unblocks read\+And\+Save\+Temperature when the CN interrupt is triggered. 
+
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_a295b01b9642c17471ed7b164c2afaaf1}\label{main_8c_a295b01b9642c17471ed7b164c2afaaf1}} 
+\index{main.c@{main.c}!generateCNInt@{generateCNInt}}
+\index{generateCNInt@{generateCNInt}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{generateCNInt()}{generateCNInt()}}
+{\footnotesize\ttfamily static void generate\+C\+N\+Int (\begin{DoxyParamCaption}\item[{void $\ast$}]{pv\+Parameters }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Generates a virtual change notice interrupt every 6 ms by setting the CN interrupt flag. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em pv\+Parameters} & Unused but required by Free\+R\+T\+OS\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_a8fd7442c17937e3c6b5ecb76b69bb12e}\label{main_8c_a8fd7442c17937e3c6b5ecb76b69bb12e}} 
+\index{main.c@{main.c}!PMP\_init@{PMP\_init}}
+\index{PMP\_init@{PMP\_init}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{PMP\_init()}{PMP\_init()}}
+{\footnotesize\ttfamily void P\+M\+P\+\_\+init (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})}
+
+
+
+Configures the parallel master port to communicate with the L\+CD. 
+
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_a2b66e78648cfdc6d2f1cacf6c2635e01}\label{main_8c_a2b66e78648cfdc6d2f1cacf6c2635e01}} 
+\index{main.c@{main.c}!printToLCD@{printToLCD}}
+\index{printToLCD@{printToLCD}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{printToLCD()}{printToLCD()}}
+{\footnotesize\ttfamily static void print\+To\+L\+CD (\begin{DoxyParamCaption}\item[{void $\ast$}]{pv\+Parameters }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Reads the temperature from a message buffer and prints it to an L\+CD. Temperature is passed using a string pointer. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em pv\+Parameters} & Unused but required by Free\+R\+T\+OS\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_a464ac1a014942c092b752b720c4ff294}\label{main_8c_a464ac1a014942c092b752b720c4ff294}} 
+\index{main.c@{main.c}!prvSetupHardware@{prvSetupHardware}}
+\index{prvSetupHardware@{prvSetupHardware}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{prvSetupHardware()}{prvSetupHardware()}}
+{\footnotesize\ttfamily static void prv\+Setup\+Hardware (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Configures the P\+I\+C32 hardware to support the operations performed by this project. 
+
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_adfb51882daf4fc9e79ae6797e6e06a05}\label{main_8c_adfb51882daf4fc9e79ae6797e6e06a05}} 
+\index{main.c@{main.c}!readAndSaveTemperature@{readAndSaveTemperature}}
+\index{readAndSaveTemperature@{readAndSaveTemperature}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{readAndSaveTemperature()}{readAndSaveTemperature()}}
+{\footnotesize\ttfamily static void read\+And\+Save\+Temperature (\begin{DoxyParamCaption}\item[{void $\ast$}]{pv\+Parameters }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Reads the temperature from an IR sensor using S\+M\+Bus and sends it to a message buffer. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em pv\+Parameters} & Unused but required by Free\+R\+T\+OS\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{main_8c_a69a37109e92ee37ae74c9b0efb150258}\label{main_8c_a69a37109e92ee37ae74c9b0efb150258}} 
+\index{main.c@{main.c}!toggleLEDA@{toggleLEDA}}
+\index{toggleLEDA@{toggleLEDA}!main.c@{main.c}}
+\doxysubsubsection{\texorpdfstring{toggleLEDA()}{toggleLEDA()}}
+{\footnotesize\ttfamily static void toggle\+L\+E\+DA (\begin{DoxyParamCaption}\item[{void $\ast$}]{pv\+Parameters }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Toggles L\+E\+DA every 3 ms. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em pv\+Parameters} & Unused but required by Free\+R\+T\+OS\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}

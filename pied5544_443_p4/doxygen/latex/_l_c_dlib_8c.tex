@@ -1,0 +1,218 @@
+\hypertarget{_l_c_dlib_8c}{}\doxysection{L\+C\+Dlib.\+c File Reference}
+\label{_l_c_dlib_8c}\index{LCDlib.c@{LCDlib.c}}
+
+
+Contains functions to communicate with the L\+CD using the P\+MP.  
+
+
+{\ttfamily \#include $<$plib.\+h$>$}\newline
+{\ttfamily \#include \char`\"{}Cerebot\+M\+X7c\+K.\+h\char`\"{}}\newline
+{\ttfamily \#include \char`\"{}L\+C\+Dlib.\+h\char`\"{}}\newline
+\doxysubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_a301a0b73016a44e015dbd374c08243d4}{L\+C\+D\+\_\+init}} (void)
+\begin{DoxyCompactList}\small\item\em Initializes the L\+CD by clearing it and setting the cursor in the top left corner. \end{DoxyCompactList}\item 
+char \mbox{\hyperlink{_l_c_dlib_8c_ad81c20c7c13afb804792160fa2b4d85a}{read\+L\+CD}} (int addr)
+\begin{DoxyCompactList}\small\item\em Reads from one of the L\+CD\textquotesingle{}s registers. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_a1e260c919cf0f73b3189f0e269282110}{write\+L\+CD}} (int addr, char c)
+\begin{DoxyCompactList}\small\item\em Writes to one of the L\+CD\textquotesingle{}s registers. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_a7a19aaec7f9deb1589a7efddf3da8d3f}{L\+C\+D\+\_\+putc}} (char c)
+\begin{DoxyCompactList}\small\item\em Prints one character to the L\+CD and advances the cursor. Sets cursor to the start of the next line on \textbackslash{}r or to the start of the current line on ~\newline
+. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_ab0af4a77078b50b0d3b244407e356c6b}{L\+C\+D\+\_\+puts}} (char $\ast$char\+\_\+string)
+\begin{DoxyCompactList}\small\item\em Prints an entire string to the L\+CD. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_ab3d3c08a4027d3e918914c1562ced027}{L\+C\+D\+\_\+clear}} (void)
+\begin{DoxyCompactList}\small\item\em Clears the L\+CD and sets the cursor to the top left corner. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_a267f0681d9097c3906a784bf4827b8ad}{L\+C\+D\+\_\+clearline}} (int line)
+\begin{DoxyCompactList}\small\item\em Clears one line of the L\+CD and sets the cursor to the beginning of the line. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_aef4f71b6dbaa446c063bc597e40886af}{L\+C\+D\+\_\+set\+\_\+cursor\+\_\+pos}} (int line, int pos)
+\begin{DoxyCompactList}\small\item\em Sets the position of the cursor. \end{DoxyCompactList}\item 
+char \mbox{\hyperlink{_l_c_dlib_8c_a6fe6f1d1c6c9a5d95243c75ee8ec934b}{busy\+L\+CD}} (void)
+\begin{DoxyCompactList}\small\item\em Checks whether the L\+CD is busy writing to a register. \end{DoxyCompactList}\item 
+void \mbox{\hyperlink{_l_c_dlib_8c_af922fd858005d5fe007914ef5f3057f0}{L\+C\+D\+\_\+delay}} (unsigned int ms)
+\begin{DoxyCompactList}\small\item\em Waits a specified time. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Contains functions to communicate with the L\+CD using the P\+MP. 
+
+\begin{DoxyAuthor}{Author}
+Parker Piedmont
+\end{DoxyAuthor}
+\begin{DoxyDate}{Date}
+02 Nov 2020 
+\end{DoxyDate}
+
+
+\doxysubsection{Function Documentation}
+\mbox{\Hypertarget{_l_c_dlib_8c_a6fe6f1d1c6c9a5d95243c75ee8ec934b}\label{_l_c_dlib_8c_a6fe6f1d1c6c9a5d95243c75ee8ec934b}} 
+\index{LCDlib.c@{LCDlib.c}!busyLCD@{busyLCD}}
+\index{busyLCD@{busyLCD}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{busyLCD()}{busyLCD()}}
+{\footnotesize\ttfamily char busy\+L\+CD (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})}
+
+
+
+Checks whether the L\+CD is busy writing to a register. 
+
+\begin{DoxyReturn}{Returns}
+Non-\/zero if busy, zero if not busy 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_ab3d3c08a4027d3e918914c1562ced027}\label{_l_c_dlib_8c_ab3d3c08a4027d3e918914c1562ced027}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_clear@{LCD\_clear}}
+\index{LCD\_clear@{LCD\_clear}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_clear()}{LCD\_clear()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+clear (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})}
+
+
+
+Clears the L\+CD and sets the cursor to the top left corner. 
+
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_a267f0681d9097c3906a784bf4827b8ad}\label{_l_c_dlib_8c_a267f0681d9097c3906a784bf4827b8ad}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_clearline@{LCD\_clearline}}
+\index{LCD\_clearline@{LCD\_clearline}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_clearline()}{LCD\_clearline()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+clearline (\begin{DoxyParamCaption}\item[{int}]{line }\end{DoxyParamCaption})}
+
+
+
+Clears one line of the L\+CD and sets the cursor to the beginning of the line. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em line} & Row to clear\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_af922fd858005d5fe007914ef5f3057f0}\label{_l_c_dlib_8c_af922fd858005d5fe007914ef5f3057f0}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_delay@{LCD\_delay}}
+\index{LCD\_delay@{LCD\_delay}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_delay()}{LCD\_delay()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+delay (\begin{DoxyParamCaption}\item[{unsigned int}]{ms }\end{DoxyParamCaption})}
+
+
+
+Waits a specified time. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em ms} & Number of milliseconds to wait\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_a301a0b73016a44e015dbd374c08243d4}\label{_l_c_dlib_8c_a301a0b73016a44e015dbd374c08243d4}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_init@{LCD\_init}}
+\index{LCD\_init@{LCD\_init}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_init()}{LCD\_init()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+init (\begin{DoxyParamCaption}\item[{void}]{ }\end{DoxyParamCaption})}
+
+
+
+Initializes the L\+CD by clearing it and setting the cursor in the top left corner. 
+
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_a7a19aaec7f9deb1589a7efddf3da8d3f}\label{_l_c_dlib_8c_a7a19aaec7f9deb1589a7efddf3da8d3f}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_putc@{LCD\_putc}}
+\index{LCD\_putc@{LCD\_putc}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_putc()}{LCD\_putc()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+putc (\begin{DoxyParamCaption}\item[{char}]{c }\end{DoxyParamCaption})}
+
+
+
+Prints one character to the L\+CD and advances the cursor. Sets cursor to the start of the next line on \textbackslash{}r or to the start of the current line on ~\newline
+. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em c} & Character to print\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_ab0af4a77078b50b0d3b244407e356c6b}\label{_l_c_dlib_8c_ab0af4a77078b50b0d3b244407e356c6b}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_puts@{LCD\_puts}}
+\index{LCD\_puts@{LCD\_puts}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_puts()}{LCD\_puts()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+puts (\begin{DoxyParamCaption}\item[{char $\ast$}]{char\+\_\+string }\end{DoxyParamCaption})}
+
+
+
+Prints an entire string to the L\+CD. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em char\+\_\+string} & String to print\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_aef4f71b6dbaa446c063bc597e40886af}\label{_l_c_dlib_8c_aef4f71b6dbaa446c063bc597e40886af}} 
+\index{LCDlib.c@{LCDlib.c}!LCD\_set\_cursor\_pos@{LCD\_set\_cursor\_pos}}
+\index{LCD\_set\_cursor\_pos@{LCD\_set\_cursor\_pos}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{LCD\_set\_cursor\_pos()}{LCD\_set\_cursor\_pos()}}
+{\footnotesize\ttfamily void L\+C\+D\+\_\+set\+\_\+cursor\+\_\+pos (\begin{DoxyParamCaption}\item[{int}]{line,  }\item[{int}]{pos }\end{DoxyParamCaption})}
+
+
+
+Sets the position of the cursor. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em line} & Row \\
+\hline
+\mbox{\texttt{ in}}  & {\em pos} & Column\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_ad81c20c7c13afb804792160fa2b4d85a}\label{_l_c_dlib_8c_ad81c20c7c13afb804792160fa2b4d85a}} 
+\index{LCDlib.c@{LCDlib.c}!readLCD@{readLCD}}
+\index{readLCD@{readLCD}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{readLCD()}{readLCD()}}
+{\footnotesize\ttfamily char read\+L\+CD (\begin{DoxyParamCaption}\item[{int}]{addr }\end{DoxyParamCaption})}
+
+
+
+Reads from one of the L\+CD\textquotesingle{}s registers. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em addr} & Address of the register to read\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Value of the register 
+\end{DoxyReturn}
+\mbox{\Hypertarget{_l_c_dlib_8c_a1e260c919cf0f73b3189f0e269282110}\label{_l_c_dlib_8c_a1e260c919cf0f73b3189f0e269282110}} 
+\index{LCDlib.c@{LCDlib.c}!writeLCD@{writeLCD}}
+\index{writeLCD@{writeLCD}!LCDlib.c@{LCDlib.c}}
+\doxysubsubsection{\texorpdfstring{writeLCD()}{writeLCD()}}
+{\footnotesize\ttfamily void write\+L\+CD (\begin{DoxyParamCaption}\item[{int}]{addr,  }\item[{char}]{c }\end{DoxyParamCaption})}
+
+
+
+Writes to one of the L\+CD\textquotesingle{}s registers. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\texttt{ in}}  & {\em addr} & Address of the register to write \\
+\hline
+\mbox{\texttt{ in}}  & {\em c} & Value to write\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+None 
+\end{DoxyReturn}
