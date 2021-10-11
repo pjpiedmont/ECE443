@@ -194,16 +194,15 @@ static void readAndSaveTemperature(void* pvParameters)
     float fahrenheit;
     char temp_str[20];
     
-    int i = 0;
-    
+	// convert address to int
     uint32_t str_addr = (uint32_t) temp_str;
     uint8_t str_addr_bytes[4];
     
+	// break address into bytes
     str_addr_bytes[0] = str_addr & 0xff;
     str_addr_bytes[1] = (str_addr >> 8) & 0xff;
     str_addr_bytes[2] = (str_addr >> 16) & 0xff;
     str_addr_bytes[3] = (str_addr >> 24) & 0xff;
-    i++;
     
 	// for error checking
     size_t xBytesSent;
@@ -285,8 +284,6 @@ static void printToLCD(void* pvParameters)
     uint8_t str_addr_bytes[4];
     
     size_t xReceivedBytes;
-    
-    int i = 0;
 
 	while (1)
 	{
@@ -296,13 +293,14 @@ static void printToLCD(void* pvParameters)
 
         xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)str_addr_bytes, 4, 0);
         
+		// reassemble address bytes into int
         str_addr |= str_addr_bytes[0];
         str_addr |= (str_addr_bytes[1] << 8);
         str_addr |= (str_addr_bytes[2] << 16);
         str_addr |= (str_addr_bytes[3] << 24);
         
+		// cast address to string
         temp_str = (char*) str_addr;
-        i++;
 
 		#if ( configUSE_TRACE_FACILITY == 1 )
 			vTracePrint(read_and_save_trace, "Received from message buffer");
