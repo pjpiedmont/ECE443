@@ -23,8 +23,7 @@
 /* Kernel includes. */
 #include "FreeRTOS.h"
 #include "task.h"
-#include "stream_buffer.h"
-#include "message_buffer.h"
+#include "semphr.h"
 
 /* Hardware specific includes. */
 #include "CerebotMX7cK.h" // JFF
@@ -55,11 +54,20 @@ const uint8_t SLAVE_ADDRESS = 0x5A;
 
 /* FUNCTION PROTOTYPES ====================================================== */
 
-// tasks
-static void generateCNInt(void* pvParameters);
-static void readAndSaveTemperature(void* pvParameters);
+// control unit tasks
+static void whichBTN(void* pvParameters);
+static void switchMode(void* pvParameters);
+static void setLowTemp(void* pvParameters);
+static void setHighTemp(void* pvParameters);
+static void sendCtrl(void* pvParameters);
+static void requestData(void* pvParameters);
+
+// I/O unit tasks
 static void printToLCD(void* pvParameters);
-static void toggleLEDA(void* pvParameters);
+static void readTemp(void* pvParameters);
+static void sendPWM(void* pvParameters);
+static void readSpeed(void* pvParameters);
+static void sendData(void* pvParameters);
 
 // ISRs
 void __attribute__( (interrupt(ipl2),
@@ -72,10 +80,15 @@ void cn_interrupt_initialize(void);
 
 
 
+/* TASK SIGNALS ============================================================= */
+
+xSemaphoreHandle unblockWhichBTN;
+
+
+
 /* GLOBAL VARIABLES ========================================================= */
 
-static TaskHandle_t readTaskHandle = NULL;
-static MessageBufferHandle_t tempBuffer = NULL;
+
 
 
 
@@ -110,19 +123,13 @@ int main( void )
     #endif
 
     LCD_init();
-    tempBuffer = xMessageBufferCreate(8);
+    unblockWhichBTN = xSemaphoreCreateBinary();
 
-	if (tempBuffer != NULL)
+	if (unblockWhichBTN != NULL)
 	{
 		// create tasks and start scheduler
-		xTaskCreate(generateCNInt, "Generate CN Interrupt",
-					configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-		xTaskCreate(readAndSaveTemperature, "Read and Save Temperature",
-					configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL,
                     1, NULL);
-		xTaskCreate(toggleLEDA, "Toggle LEDA", configMINIMAL_STACK_SIZE, NULL,
-                    3, NULL);
 
 		vTaskStartScheduler();
 	}
@@ -143,6 +150,18 @@ int main( void )
 
 
 /* TASK DEFINITIONS ========================================================= */
+
+static void whichBTN(void* pvParameters)
+{
+    // make sure semaphore is empty before doing anything
+    xSemaphoreTake(unblockPrintToLCD, 0);
+    
+    while (1)
+    {
+        // attempt to take semaphore, block for as long as possible
+        xSemaphoreTake(unblockPrintToLCD, portMAX_DELAY);
+    }
+}
 
 /*!
  * @brief
@@ -179,7 +198,7 @@ static void generateCNInt(void* pvParameters)
  * 
  * @return None
  */
-static void readAndSaveTemperature(void* pvParameters)
+static void readTemp(void* pvParameters)
 {
 	// SMBus parameters
     const uint8_t slave_addr = 0x5a;
@@ -359,11 +378,7 @@ void CN_ISR_handler(void)
         vTracePrint(cn_isr_trace, "Starting");
     #endif
     
-	if (readTaskHandle != NULL)
-	{
-    	vTaskNotifyGiveIndexedFromISR(readTaskHandle, 0,
-                                      &xHigherPriorityTaskWoken);
-	}
+	xSemaphoreGiveFromISR(unblockWhichBTN, &xHigherPriorityTaskWoken);
 
 	#if ( configUSE_TRACE_FACILITY == 1 )
 		vTracePrint(cn_isr_trace, "Notified readAndSaveTemperature");
