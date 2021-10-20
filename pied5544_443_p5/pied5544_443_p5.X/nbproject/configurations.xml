@@ -32,7 +32,6 @@
       <itemPath>../../../TraceRecorder/trcKernelPort.c</itemPath>
       <itemPath>../../../TraceRecorder/trcSnapshotRecorder.c</itemPath>
       <itemPath>../main.c</itemPath>
-      <itemPath>../cn_isr_wrapper.S</itemPath>
       <itemPath>../IRlib.c</itemPath>
       <itemPath>../LCDlib.c</itemPath>
     </logicalFolder>

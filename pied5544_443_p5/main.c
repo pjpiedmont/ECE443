@@ -54,6 +54,12 @@ const uint8_t SLAVE_ADDRESS = 0x5A;
 
 /* FUNCTION PROTOTYPES ====================================================== */
 
+static void pollBTN(void* pvParameters);
+static void pollBTNs(void* pvParameters);
+static void BTN1Handler(void* pvParameters);
+static void BTN2Handler(void* pvParameters);
+static void BTN3Handler(void* pvParameters);
+
 // control unit tasks
 static void whichBTN(void* pvParameters);
 static void switchMode(void* pvParameters);
@@ -70,19 +76,26 @@ static void readSpeed(void* pvParameters);
 static void sendData(void* pvParameters);
 
 // ISRs
-void __attribute__( (interrupt(ipl2),
-					 vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
+//void __attribute__( (interrupt(ipl2),
+//					 vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
 
 // hardware setup
 static void prvSetupHardware( void );
 void PMP_init(void);
-void cn_interrupt_initialize(void);
 
 
 
 /* TASK SIGNALS ============================================================= */
 
-xSemaphoreHandle unblockWhichBTN;
+//xSemaphoreHandle unblockWhichBTN;
+
+xSemaphoreHandle unblockBTN1Handler;
+xSemaphoreHandle unblockBTN2Handler;
+xSemaphoreHandle unblockBTN3Handler;
+
+xSemaphoreHandle unblockSwitchMode;
+xSemaphoreHandle unblockSetLowTemp;
+xSemaphoreHandle unblockSetHighTemp;
 
 
 
@@ -122,13 +135,28 @@ int main( void )
 		error_trace = xTraceRegisterString("Error");
     #endif
 
-    LCD_init();
-    unblockWhichBTN = xSemaphoreCreateBinary();
+//    LCD_init();
+    unblockBTN1Handler = xSemaphoreCreateBinary();
+    unblockBTN2Handler = xSemaphoreCreateBinary();
+    unblockBTN3Handler = xSemaphoreCreateBinary();
 
-	if (unblockWhichBTN != NULL)
+	if ((unblockBTN1Handler != NULL) && (unblockBTN2Handler != NULL) && (unblockBTN3Handler != NULL))
 	{
 		// create tasks and start scheduler
-		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL,
+//		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL,
+//                    1, NULL);
+        xTaskCreate(pollBTN, "Poll BTN1", configMINIMAL_STACK_SIZE,
+                    (void*) BTN1, 2, NULL);
+        xTaskCreate(pollBTN, "Poll BTN2", configMINIMAL_STACK_SIZE,
+                    (void*) BTN2, 2, NULL);
+        xTaskCreate(pollBTN, "Poll BTN3", configMINIMAL_STACK_SIZE,
+                    (void*) BTN3, 2, NULL);
+        
+        xTaskCreate(BTN1Handler, "BTN1 Handler", configMINIMAL_STACK_SIZE, NULL,
+                    1, NULL);
+        xTaskCreate(BTN2Handler, "BTN2 Handler", configMINIMAL_STACK_SIZE, NULL,
+                    1, NULL);
+        xTaskCreate(BTN3Handler, "BTN3 Handler", configMINIMAL_STACK_SIZE, NULL,
                     1, NULL);
 
 		vTaskStartScheduler();
@@ -151,246 +179,111 @@ int main( void )
 
 /* TASK DEFINITIONS ========================================================= */
 
-static void whichBTN(void* pvParameters)
+static void pollBTN(void* pvParameters)
 {
-    // make sure semaphore is empty before doing anything
-    xSemaphoreTake(unblockPrintToLCD, 0);
+    unsigned int btn = (unsigned int) pvParameters;
+    unsigned int port;
+    unsigned int btn_curr = 0;
+    unsigned int btn_prev = 0;
+    
+    xSemaphoreHandle unblock;
+    
+    const TickType_t period = 1 / portTICK_RATE_MS;
+    TickType_t lastWakeTime = xTaskGetTickCount();
+    
+    if (btn == BTN1)
+    {
+        port = IOPORT_G;
+        unblock = unblockBTN1Handler;
+    }
+    else if (btn == BTN2)
+    {
+        port = IOPORT_G;
+        unblock = unblockBTN2Handler;
+    }
+    else if (btn == BTN3)
+    {
+        port = IOPORT_A;
+        unblock = unblockBTN3Handler;
+    }
     
     while (1)
     {
-        // attempt to take semaphore, block for as long as possible
-        xSemaphoreTake(unblockPrintToLCD, portMAX_DELAY);
+        btn_curr = PORTReadBits(port, btn);
+        
+        if (btn_curr && !btn_prev)
+        {
+            vTaskDelay(20 / portTICK_RATE_MS);
+            
+            if (PORTReadBits(port, btn))
+            {
+                xSemaphoreGive(unblock);
+            }
+        }
+        
+        btn_prev = btn_curr;
+        
+        vTaskDelayUntil(&lastWakeTime, period);
     }
 }
 
-/*!
- * @brief
- * Generates a virtual change notice interrupt every 6 ms by setting the CN
- * interrupt flag.
- * 
- * @param[in] pvParameters  Unused but required by FreeRTOS
- * 
- * @return None
- */
-static void generateCNInt(void* pvParameters)
+static void pollBTNs(void* pvParameters)
 {
-	const TickType_t period = 6 / portTICK_RATE_MS;
-	TickType_t lastWakeTime = xTaskGetTickCount();
-
-	while (1)
-	{
-        #if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(cn_intgen_trace, "Generating CN interrupt");
-		#endif
-		
-        INTSetFlag(INT_CN);
-
-		vTaskDelayUntil(&lastWakeTime, period);
-	}
-}
-
-/*!
- * @brief
- * Reads the temperature from an IR sensor using SMBus and sends it to a message
- * buffer.
- * 
- * @param[in] pvParameters  Unused but required by FreeRTOS
- * 
- * @return None
- */
-static void readTemp(void* pvParameters)
-{
-	// SMBus parameters
-    const uint8_t slave_addr = 0x5a;
-    const uint8_t command = 0x07;
-    uint8_t ir_data[3];
-    const int data_len = 3;
+    const TickType_t period = 1 / portTICK_RATE_MS;
+    TickType_t lastWakeTime = xTaskGetTickCount();
     
-	// used to calculate temperature in deg F
-    uint16_t temp_2_bytes;
-    float kelvin;
-    float celsius;
-    float fahrenheit;
-    char temp_str[20];
-    
-	// convert address to int
-    uint32_t str_addr = (uint32_t) temp_str;
-    uint8_t str_addr_bytes[4];
-    
-	// break address into bytes
-    str_addr_bytes[0] = str_addr & 0xff;
-    str_addr_bytes[1] = (str_addr >> 8) & 0xff;
-    str_addr_bytes[2] = (str_addr >> 16) & 0xff;
-    str_addr_bytes[3] = (str_addr >> 24) & 0xff;
-    
-	// for error checking
-    size_t xBytesSent;
-    
-	// save task handle for notifications from ISR
-	readTaskHandle = xTaskGetCurrentTaskHandle();
-
-	while (1)
-	{
-		// receive notification from CN ISR
-		ulTaskNotifyTakeIndexed(0, pdTRUE, portMAX_DELAY);
-
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(read_and_save_trace, "Unblocked");
-			vTracePrint(read_and_save_trace, "Reading IR sensor");
-		#endif
-        
-        I2C1_IR_Read(slave_addr, command, ir_data, data_len);
-
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(read_and_save_trace, "Read IR sensor");
-			vTracePrint(read_and_save_trace, "Calculating temperature");
-		#endif
-
-		// assemble bytes from IR sensor into a single integer
-		// IR sensor sends temp as 2 bytes in little-endian order
-        temp_2_bytes = (ir_data[1] << 8) | ir_data[0];
-        
-        // calculate temperature
-        if (temp_2_bytes > 0x7fff)  // sensor error
-        {
-            sprintf(temp_str, "Temp = xxx.xx F");
-        }
-        else
-        {
-			// convert temp from binary to deg F
-            kelvin = temp_2_bytes * 0.02f;
-            celsius = kelvin - 273.15f;
-            fahrenheit = (celsius * (9.0f/5.0f)) + 32;
-            sprintf(temp_str, "Temp = %3.2f F", fahrenheit);
-        }
-
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(read_and_save_trace, "Calculated temperature");
-			vTracePrint(read_and_save_trace, "Sending to message buffer");
-		#endif
-        
-		// send pointer to temp_str - not the contents of the string
-        xBytesSent = xMessageBufferSend(tempBuffer, (void*)str_addr_bytes, 4, 0);
-
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(read_and_save_trace, "Sent to message buffer");
-		#endif
-        
-        if (xBytesSent != 4)
-        {
-            #if ( configUSE_TRACE_FACILITY == 1 )
-				vTracePrint(error_trace, "Incorrect number of bytes written\
-										  to message buffer");
-			#endif
-        }
-	}
-}
-
-/*!
- * @brief
- * Reads the temperature from a message buffer and prints it to an LCD.
- * Temperature is passed using a string pointer.
- * 
- * @param[in] pvParameters  Unused but required by FreeRTOS
- * 
- * @return None
- */
-static void printToLCD(void* pvParameters)
-{
-    char* temp_str;
-    
-    uint32_t str_addr = 0x00000000;
-    uint8_t str_addr_bytes[4];
-    
-    size_t xReceivedBytes;
-
-	while (1)
-	{
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(lcd_trace, "Receiving from message buffer");
-		#endif
-
-        xReceivedBytes = xMessageBufferReceive(tempBuffer, (void*)str_addr_bytes, 4, 0);
-        
-		// reassemble address bytes into int
-        str_addr |= str_addr_bytes[0];
-        str_addr |= (str_addr_bytes[1] << 8);
-        str_addr |= (str_addr_bytes[2] << 16);
-        str_addr |= (str_addr_bytes[3] << 24);
-        
-		// cast address to string
-        temp_str = (char*) str_addr;
-
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(read_and_save_trace, "Received from message buffer");
-			vTracePrint(read_and_save_trace, "Printing to LCD");
-		#endif
-
-		LCD_clear();
-		LCD_puts(temp_str);
-
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(read_and_save_trace, "Printed to LCD");
-		#endif
-        
-        // LCD is illegible if it updates too quickly
-        vTaskDelay(100 / portTICK_RATE_MS);
-	}
-}
-
-/*!
- * @brief
- * Toggles LEDA every 3 ms.
- * 
- * @param[in] pvParameters  Unused but required by FreeRTOS
- * 
- * @return None
- */
-static void toggleLEDA(void* pvParameters)
-{
-	while (1)
+    while (1)
     {
-        LATBINV = LEDA;
+        if (PORTReadBits(IOPORT_G, BTN1))
+        {
+            xSemaphoreGive(unblockBTN1Handler);
+        }
 
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(heartbeat_trace, "Toggled LEDA");
-		#endif
+        if (PORTReadBits(IOPORT_G, BTN2))
+        {
+            xSemaphoreGive(unblockBTN2Handler);
+        }
 
-        vTaskDelay(3 / portTICK_RATE_MS);
+        if (PORTReadBits(IOPORT_A, BTN3))
+        {
+            xSemaphoreGive(unblockBTN3Handler);
+        }
+        
+        vTaskDelayUntil(&lastWakeTime, period);
     }
 }
 
-
-
-/* INTERRUPT SERVICE ROUTINES =============================================== */
-
-/*!
- * @brief
- * Unblocks readAndSaveTemperature when the CN interrupt is triggered.
- * 
- * @return None
- */
-void CN_ISR_handler(void)
+static void BTN1Handler(void* pvParameters)
 {
-    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreTake(unblockBTN1Handler, 0);
+    
+    while (1)
+    {
+        xSemaphoreTake(unblockBTN1Handler, portMAX_DELAY);
+        LATBINV = LEDA;
+    }
+}
 
-	#if ( configUSE_TRACE_FACILITY == 1 )
-        vTracePrint(cn_isr_trace, "Starting");
-    #endif
+static void BTN2Handler(void* pvParameters)
+{
+    xSemaphoreTake(unblockBTN2Handler, 0);
     
-	xSemaphoreGiveFromISR(unblockWhichBTN, &xHigherPriorityTaskWoken);
+    while (1)
+    {
+        xSemaphoreTake(unblockBTN2Handler, portMAX_DELAY);
+        LATBINV = LEDB;
+    }
+}
 
-	#if ( configUSE_TRACE_FACILITY == 1 )
-		vTracePrint(cn_isr_trace, "Notified readAndSaveTemperature");
-        vTracePrint(cn_isr_trace, "Exiting");
-    #endif
+static void BTN3Handler(void* pvParameters)
+{
+    xSemaphoreTake(unblockBTN3Handler, 0);
     
-    // clear interrupt flag
-    PORTRead(IOPORT_G);
-    mCNClearIntFlag();
-    
-    // switch context to higher priority task
-    portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+    while (1)
+    {
+        xSemaphoreTake(unblockBTN3Handler, portMAX_DELAY);
+        LATBINV = LEDC;
+    }
 }
 
 
@@ -416,9 +309,6 @@ static void prvSetupHardware( void )
     PMP_init();
     OpenI2C1(I2C_EN, BRG_VAL);
     
-    // enable CN interrupt
-    cn_interrupt_initialize();
-    
     /* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
     INTEnableInterrupts();   /*Do as needed for global interrupt control */
@@ -439,31 +329,6 @@ void PMP_init(void)
     int cfg3 = PMP_PEN_0;        // only PMA0 enabled
     int cfg4 = PMP_INT_OFF;      // no interrupts used
     mPMPOpen(cfg1, cfg2, cfg3, cfg4);
-}
-
-/*!
- * @brief
- * Enables the CN interrupt on BTN1 at priority level 2.
- * 
- * @return None
- */
-void cn_interrupt_initialize(void)
-{
-    unsigned int dummy; // used to hold PORT read value
-    
-    // Enable CN for BTN1
-    mCNOpen(CN_ON, CN8_ENABLE, 0);
-    
-    // Set CN interrupts priority level 1 sub priority level 0
-    mCNSetIntPriority(2);       // Group priority (1 to 7)
-    mCNSetIntSubPriority(0);    // Subgroup priority (0 to 3)
-
-    // read port to clear difference
-    dummy = PORTReadBits(IOPORT_G, BTN1);
-    mCNClearIntFlag();          // Clear CN interrupt flag
-    mCNIntEnable(1);            // Enable CNinterrupts
-    
-    // Global interrupts must enabled to complete the initialization.
 }
 
 
