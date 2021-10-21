@@ -16,8 +16,6 @@
  * 04 Oct 2021
  */
 
-
-
 /* INCLUDES ================================================================= */
 
 /* Kernel includes. */
@@ -39,254 +37,336 @@
 #include "LCDlib.h"
 #include "IRlib.h"
 
+/* DATA STRUCTURES ========================================================== */
 
+typedef struct
+{
+	unsigned int btn;
+	unsigned int port;
+	xSemaphoreHandle unblock;
+} btn_struct;
 
 /* CONSTANTS ================================================================ */
 
 // I2C configs
-#define FSCK  80000
+#define FSCK 80000
 const int BRG_VAL = ((FPB / 2 / FSCK) - 2);
 
 // IR sensor configs
 const uint8_t SLAVE_ADDRESS = 0x5A;
 
-
-
 /* FUNCTION PROTOTYPES ====================================================== */
 
-static void pollBTN(void* pvParameters);
-static void pollBTNs(void* pvParameters);
-static void BTN1Handler(void* pvParameters);
-static void BTN2Handler(void* pvParameters);
-static void BTN3Handler(void* pvParameters);
-
 // control unit tasks
-static void whichBTN(void* pvParameters);
-static void switchMode(void* pvParameters);
-static void setLowTemp(void* pvParameters);
-static void setHighTemp(void* pvParameters);
-static void sendCtrl(void* pvParameters);
-static void requestData(void* pvParameters);
+static void pollBTN(void *pvParameters);
+static void printToLCD(void *pvParameters);
+static void switchMode(void *pvParameters);
+static void setTemp(void *pvParameters);
+static void sendPWM(void *pvParameters);
+static void requestData(void *pvParameters);
 
 // I/O unit tasks
-static void printToLCD(void* pvParameters);
-static void readTemp(void* pvParameters);
-static void sendPWM(void* pvParameters);
-static void readSpeed(void* pvParameters);
-static void sendData(void* pvParameters);
+
+static void readSensors(void *pvParameters);
+static void sendData(void *pvParameters);
 
 // ISRs
 //void __attribute__( (interrupt(ipl2),
 //					 vector(_CHANGE_NOTICE_VECTOR))) CN_ISR_handler( void );
 
 // hardware setup
-static void prvSetupHardware( void );
+static void prvSetupHardware(void);
 void PMP_init(void);
 
-
-
 /* TASK SIGNALS ============================================================= */
-
-//xSemaphoreHandle unblockWhichBTN;
-
-xSemaphoreHandle unblockBTN1Handler;
-xSemaphoreHandle unblockBTN2Handler;
-xSemaphoreHandle unblockBTN3Handler;
 
 xSemaphoreHandle unblockSwitchMode;
 xSemaphoreHandle unblockSetLowTemp;
 xSemaphoreHandle unblockSetHighTemp;
 
-
-
 /* GLOBAL VARIABLES ========================================================= */
 
+uint8_t mode;
 
-
-
+float current_temp;
+float low_temp;
+float high_temp;
+int duty_cycle;
+float rps;
 
 /* TRACE STRINGS ============================================================ */
-    
-#if ( configUSE_TRACE_FACILITY == 1 )
-    traceString cn_intgen_trace;
-    traceString cn_isr_trace;
-	traceString heartbeat_trace;
-	traceString read_and_save_trace;
-	traceString lcd_trace;
-	traceString error_trace;
+
+#if (configUSE_TRACE_FACILITY == 1)
+traceString cn_intgen_trace;
+traceString cn_isr_trace;
+traceString heartbeat_trace;
+traceString read_and_save_trace;
+traceString lcd_trace;
+traceString error_trace;
 #endif
-
-
 
 /* MAIN ===================================================================== */
 
-int main( void )
+int main(void)
 {
-    prvSetupHardware();		/*  Configure hardware */
-    
-    // initialize tracealyzer and start recording
-    #if ( configUSE_TRACE_FACILITY == 1 )
-        vTraceEnable(TRC_START);
-        cn_intgen_trace = xTraceRegisterString("CN Int Gen");
-        cn_isr_trace = xTraceRegisterString("CN ISR");
-		heartbeat_trace = xTraceRegisterString("Heartbeat");
-		read_and_save_trace = xTraceRegisterString("Read & Save");
-		lcd_trace = xTraceRegisterString("LCD");
-		error_trace = xTraceRegisterString("Error");
-    #endif
+	prvSetupHardware(); /*  Configure hardware */
 
-//    LCD_init();
-    unblockBTN1Handler = xSemaphoreCreateBinary();
-    unblockBTN2Handler = xSemaphoreCreateBinary();
-    unblockBTN3Handler = xSemaphoreCreateBinary();
+// initialize tracealyzer and start recording
+#if (configUSE_TRACE_FACILITY == 1)
+	vTraceEnable(TRC_START);
+	cn_intgen_trace = xTraceRegisterString("CN Int Gen");
+	cn_isr_trace = xTraceRegisterString("CN ISR");
+	heartbeat_trace = xTraceRegisterString("Heartbeat");
+	read_and_save_trace = xTraceRegisterString("Read & Save");
+	lcd_trace = xTraceRegisterString("LCD");
+	error_trace = xTraceRegisterString("Error");
+#endif
 
-	if ((unblockBTN1Handler != NULL) && (unblockBTN2Handler != NULL) && (unblockBTN3Handler != NULL))
+	btn_struct btn1_struct;
+	btn_struct btn2_struct;
+	btn_struct btn3_struct;
+
+	btn1_struct.btn = BTN1;
+	btn1_struct.port = IOPORT_G;
+	btn1_struct.unblock = unblockSwitchMode;
+
+	btn2_struct.btn = BTN2;
+	btn2_struct.port = IOPORT_G;
+	btn2_struct.unblock = unblockSetLowTemp;
+
+	btn3_struct.btn = BTN3;
+	btn3_struct.port = IOPORT_A;
+	btn3_struct.unblock = unblockSetHighTemp;
+
+	mode = 1;
+	LATGCLR = LED1;
+
+	low_temp = -1000;
+	high_temp = 1000;
+
+	//    LCD_init();
+	unblockSwitchMode = xSemaphoreCreateBinary();
+	unblockSetLowTemp = xSemaphoreCreateBinary();
+	unblockSetHighTemp = xSemaphoreCreateBinary();
+
+	if ((unblockSwitchMode != NULL) && (unblockSetLowTemp != NULL) && (unblockSetHighTemp != NULL))
 	{
 		// create tasks and start scheduler
-//		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL,
-//                    1, NULL);
-        xTaskCreate(pollBTN, "Poll BTN1", configMINIMAL_STACK_SIZE,
-                    (void*) BTN1, 2, NULL);
-        xTaskCreate(pollBTN, "Poll BTN2", configMINIMAL_STACK_SIZE,
-                    (void*) BTN2, 2, NULL);
-        xTaskCreate(pollBTN, "Poll BTN3", configMINIMAL_STACK_SIZE,
-                    (void*) BTN3, 2, NULL);
-        
-        xTaskCreate(BTN1Handler, "BTN1 Handler", configMINIMAL_STACK_SIZE, NULL,
-                    1, NULL);
-        xTaskCreate(BTN2Handler, "BTN2 Handler", configMINIMAL_STACK_SIZE, NULL,
-                    1, NULL);
-        xTaskCreate(BTN3Handler, "BTN3 Handler", configMINIMAL_STACK_SIZE, NULL,
-                    1, NULL);
+		xTaskCreate(pollBTN, "BTN1 Poll", configMINIMAL_STACK_SIZE, (void *)btn1_struct, 2, NULL);
+		xTaskCreate(pollBTN, "BTN2 Poll", configMINIMAL_STACK_SIZE, (void *)btn2_struct, 2, NULL);
+		xTaskCreate(pollBTN, "BTN3 Poll", configMINIMAL_STACK_SIZE, (void *)btn3_struct, 2, NULL);
+		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+		xTaskCreate(switchMode, "Mode Switch", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+		xTaskCreate(setLowTemp, "Low Temp Set", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+		xTaskCreate(setHighTemp, "High Temp Set", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 
 		vTaskStartScheduler();
 	}
 
-    // spin if there isn't enough memory for the heap or if message buffer
+	// spin if there isn't enough memory for the heap or if message buffer
 	// creation fails
 	while (1)
 	{
-		#if ( configUSE_TRACE_FACILITY == 1 )
-			vTracePrint(error_trace, "Heap allocation or message buffer\
+#if (configUSE_TRACE_FACILITY == 1)
+		vTracePrint(error_trace, "Heap allocation or message buffer\
 									  creation failed");
-		#endif
+#endif
 	}
 
-    return 1;
+	return 1;
 }
-
-
 
 /* TASK DEFINITIONS ========================================================= */
 
-static void pollBTN(void* pvParameters)
+static void pollBTN(void *pvParameters)
 {
-    unsigned int btn = (unsigned int) pvParameters;
-    unsigned int port;
-    unsigned int btn_curr = 0;
-    unsigned int btn_prev = 0;
-    
-    xSemaphoreHandle unblock;
-    
-    const TickType_t period = 1 / portTICK_RATE_MS;
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    
-    if (btn == BTN1)
-    {
-        port = IOPORT_G;
-        unblock = unblockBTN1Handler;
-    }
-    else if (btn == BTN2)
-    {
-        port = IOPORT_G;
-        unblock = unblockBTN2Handler;
-    }
-    else if (btn == BTN3)
-    {
-        port = IOPORT_A;
-        unblock = unblockBTN3Handler;
-    }
-    
-    while (1)
-    {
-        btn_curr = PORTReadBits(port, btn);
-        
-        if (btn_curr && !btn_prev)
-        {
-            vTaskDelay(20 / portTICK_RATE_MS);
-            
-            if (PORTReadBits(port, btn))
-            {
-                xSemaphoreGive(unblock);
-            }
-        }
-        
-        btn_prev = btn_curr;
-        
-        vTaskDelayUntil(&lastWakeTime, period);
-    }
+	btn_struct params = (btn_struct)pvParameters;
+
+	unsigned int btn_curr = 0;
+	unsigned int btn_prev = 0;
+
+	const TickType_t period = 1 / portTICK_RATE_MS;
+	TickType_t lastWakeTime = xTaskGetTickCount();
+
+	while (1)
+	{
+		btn_curr = PORTReadBits(params.port, params.btn);
+
+		if (btn_curr && !btn_prev) // if button has been pressed
+		{
+			vTaskDelay(20 / portTICK_RATE_MS);
+
+			if (PORTReadBits(params.port, params.btn))
+			{
+				xSemaphoreGive(params.unblock);
+			}
+		}
+
+		btn_prev = btn_curr;
+
+		vTaskDelayUntil(&lastWakeTime, period);
+	}
 }
 
-static void pollBTNs(void* pvParameters)
+static void printToLCD(void* pvParameters)
 {
-    const TickType_t period = 1 / portTICK_RATE_MS;
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    
-    while (1)
-    {
-        if (PORTReadBits(IOPORT_G, BTN1))
-        {
-            xSemaphoreGive(unblockBTN1Handler);
-        }
+	char temp_curr[5];
+	char temp_lo[5];
+	char temp_hi[5];
+	char pwm[4];
+	char speed[6];
 
-        if (PORTReadBits(IOPORT_G, BTN2))
-        {
-            xSemaphoreGive(unblockBTN2Handler);
-        }
+	while (1)
+	{
+		sprintf(temp_curr, "%2.1f", current_temp);
+		sprintf(temp_lo, "%2.1f", low_temp);
+		sprintf(temp_hi, "%2.1f", high_temp);
+		sprintf(pwm, "%d\%", duty_cycle);
+		sprintf(speed, "%3.2f", rps);
 
-        if (PORTReadBits(IOPORT_A, BTN3))
-        {
-            xSemaphoreGive(unblockBTN3Handler);
-        }
-        
-        vTaskDelayUntil(&lastWakeTime, period);
-    }
+		if (!mode)  // if operational mode
+		{
+			LCD_clear();
+
+			LCD_set_cursor_pos(1, 6);
+			LCD_puts(temp_curr);
+
+			LCD_set_cursor_pos(1, 0);
+			LCD_puts(temp_lo);
+
+			LCD_set_cursor_pos(1, 12);
+			LCD_puts(temp_hi);
+
+			LCD_set_cursor_pos(0, 0);
+			LCD_puts(pwm);
+
+			LCD_set_cursor_pos(0, 10);
+			LCD_puts(speed);
+		}
+		else  // if config mode
+		{
+			LCD_clear();
+
+			LCD_set_cursor_pos(0, 6);
+			LCD_puts(temp_curr);
+
+			LCD_set_cursor_pos(1, 0);
+			LCD_puts(temp_lo);
+
+			LCD_set_cursor_pos(1, 12);
+			LCD_puts(temp_hi);
+		}
+	}
 }
 
-static void BTN1Handler(void* pvParameters)
+static void switchMode(void *pvParameters)
 {
-    xSemaphoreTake(unblockBTN1Handler, 0);
-    
-    while (1)
-    {
-        xSemaphoreTake(unblockBTN1Handler, portMAX_DELAY);
-        LATBINV = LEDA;
-    }
+	xSemaphoreTake(unblockSwitchMode, 0);
+
+	while (1)
+	{
+		xSemaphoreTake(unblockSwitchMode, portMAX_DELAY);
+
+		// if operational mode or config mode and temps set correctly
+		if (!mode || (mode && (low_temp > -1000) && (high_temp < 1000)))
+		{
+			// take mutex
+			mode = !mode;
+			// give mutex
+
+			LATGINV = LED1;
+		}
+	}
 }
 
-static void BTN2Handler(void* pvParameters)
+static void setLowTemp(void *pvParameters)
 {
-    xSemaphoreTake(unblockBTN2Handler, 0);
-    
-    while (1)
-    {
-        xSemaphoreTake(unblockBTN2Handler, portMAX_DELAY);
-        LATBINV = LEDB;
-    }
+	xSemaphoreTake(unblockSetLowTemp, 0);
+
+	while (1)
+	{
+		xSemaphoreTake(unblockSetLowTemp, portMAX_DELAY);
+
+		// send RTR frame
+		// take semaphore (given by CAN1 ISR)
+		// extract temp from response
+
+		// take mutex
+		// temp = can.temp;
+		// give mutex
+
+		LATBINV = LEDB;
+	}
 }
 
-static void BTN3Handler(void* pvParameters)
+static void setHighTemp(void *pvParameters)
 {
-    xSemaphoreTake(unblockBTN3Handler, 0);
-    
-    while (1)
-    {
-        xSemaphoreTake(unblockBTN3Handler, portMAX_DELAY);
-        LATBINV = LEDC;
-    }
+	xSemaphoreTake(unblockSetHighTemp, 0);
+
+	while (1)
+	{
+		xSemaphoreTake(unblockSetHighTemp, portMAX_DELAY);
+
+		// send RTR frame
+		// take semaphore (given by CAN1 ISR)
+		// extract temp from response
+
+		// take mutex
+		// temp = can.temp;
+		// give mutex
+
+		LATBINV = LEDB;
+	}
 }
 
+static void sendPWM(void *pvParameters)
+{
+	while (1)
+	{
+		// construct data frame
+		// send data frame
 
+		LATBINV = LEDC;
+
+		// delay 2000ms
+	}
+}
+
+static void requestData(void* pvParameters)
+{
+	// take semaphore
+
+	while (1)
+	{
+		// take semaphore
+		// construct RTR frame
+		// send RTR frame
+
+		LATBINV = LEDA;
+	}
+}
+
+static void readSensors(void* pvParameters)
+{
+	// take semaphore
+
+	while (1)
+	{
+		// take semaphore
+		// read 
+	}
+}
+
+static void sendData(void* pvParameters)
+{
+	// take semaphore (given by CAN2 ISR)
+
+	while (1)
+	{
+		// construct message
+		// send message
+	}
+}
 
 /* SETUP FUNCTION DEFINITIONS =============================================== */
 
@@ -297,22 +377,22 @@ static void BTN3Handler(void* pvParameters)
  * 
  * @return None
  */
-static void prvSetupHardware( void )
+static void prvSetupHardware(void)
 {
-    // set up Cerebot components
-    Cerebot_mx7cK_setup();
-    
-    /* Set up PmodSTEM LEDs */
-    PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
-    LATBCLR = SM_LEDS;                      /* Clear all SM LED bits */
-    
-    PMP_init();
-    OpenI2C1(I2C_EN, BRG_VAL);
-    
-    /* Enable multi-vector interrupts */
-    INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
-    INTEnableInterrupts();   /*Do as needed for global interrupt control */
-    portDISABLE_INTERRUPTS();
+	// set up Cerebot components
+	Cerebot_mx7cK_setup();
+
+	/* Set up PmodSTEM LEDs */
+	PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
+	LATBCLR = SM_LEDS; /* Clear all SM LED bits */
+
+	PMP_init();
+	OpenI2C1(I2C_EN, BRG_VAL);
+
+	/* Enable multi-vector interrupts */
+	INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR); /* Do only once */
+	INTEnableInterrupts();							   /*Do as needed for global interrupt control */
+	portDISABLE_INTERRUPTS();
 }
 
 /*!
@@ -323,19 +403,17 @@ static void prvSetupHardware( void )
  */
 void PMP_init(void)
 {
-    int cfg1 = PMP_ON | PMP_READ_WRITE_EN | PMP_READ_POL_HI | PMP_WRITE_POL_HI;
-    int cfg2 = PMP_DATA_BUS_8 | PMP_MODE_MASTER1 | PMP_WAIT_BEG_1 | 
-               PMP_WAIT_MID_2 | PMP_WAIT_END_1;
-    int cfg3 = PMP_PEN_0;        // only PMA0 enabled
-    int cfg4 = PMP_INT_OFF;      // no interrupts used
-    mPMPOpen(cfg1, cfg2, cfg3, cfg4);
+	int cfg1 = PMP_ON | PMP_READ_WRITE_EN | PMP_READ_POL_HI | PMP_WRITE_POL_HI;
+	int cfg2 = PMP_DATA_BUS_8 | PMP_MODE_MASTER1 | PMP_WAIT_BEG_1 |
+			   PMP_WAIT_MID_2 | PMP_WAIT_END_1;
+	int cfg3 = PMP_PEN_0;	// only PMA0 enabled
+	int cfg4 = PMP_INT_OFF; // no interrupts used
+	mPMPOpen(cfg1, cfg2, cfg3, cfg4);
 }
-
-
 
 /* HOOK FUNCTION DEFINITIONS ================================================ */
 
-void vApplicationMallocFailedHook( void )
+void vApplicationMallocFailedHook(void)
 {
 	/* vApplicationMallocFailedHook() will only be called if
 	configUSE_MALLOC_FAILED_HOOK is set to 1 in FreeRTOSConfig.h.  It is a hook
@@ -348,7 +426,8 @@ void vApplicationMallocFailedHook( void )
 	to query the size of free heap space that remains (although it does not
 	provide information on how the remaining heap might be fragmented). */
 	taskDISABLE_INTERRUPTS();
-	for( ;; );
+	for (;;)
+		;
 }
 /*-----------------------------------------------------------*/
 
@@ -360,7 +439,7 @@ void vApplicationMallocFailedHook( void )
  * NOTES:           Runs whenever no other task or ISR is running. Has a
  *                  priority of 0.
  * END DESCRIPTION ************************************************************/
-void vApplicationIdleHook( void )
+void vApplicationIdleHook(void)
 {
 	/* vApplicationIdleHook() will only be called if configUSE_IDLE_HOOK is set
 	to 1 in FreeRTOSConfig.h.  It will be called on each iteration of the idle
@@ -371,26 +450,28 @@ void vApplicationIdleHook( void )
 	important that vApplicationIdleHook() is permitted to return to its calling
 	function, because it is the responsibility of the idle task to clean up
 	memory allocated by the kernel to any task that has since been deleted. */
-    
-    while (1);
+
+	while (1)
+		;
 }
 /*-----------------------------------------------------------*/
 
-void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
 {
-	( void ) pcTaskName;
-	( void ) pxTask;
+	(void)pcTaskName;
+	(void)pxTask;
 
 	/* Run time task stack overflow checking is performed if
 	configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook	function is 
 	called if a task stack overflow is detected.  Note the system/interrupt
 	stack is not checked. */
 	taskDISABLE_INTERRUPTS();
-	for( ;; );
+	for (;;)
+		;
 }
 /*-----------------------------------------------------------*/
 
-void vApplicationTickHook( void )
+void vApplicationTickHook(void)
 {
 	/* This function will be called by each tick interrupt if
 	configUSE_TICK_HOOK is set to 1 in FreeRTOSConfig.h.  User code can be
@@ -400,36 +481,37 @@ void vApplicationTickHook( void )
 }
 /*-----------------------------------------------------------*/
 
-void _general_exception_handler( unsigned long ulCause, unsigned long ulStatus )
+void _general_exception_handler(unsigned long ulCause, unsigned long ulStatus)
 {
 	/* This overrides the definition provided by the kernel.  Other exceptions 
 	should be handled here. */
-    
-    #if ( configUSE_TRACE_FACILITY == 1 )
-        vTracePrint(error_trace, "Exception encountered");
-    #endif
 
-	for( ;; );
+#if (configUSE_TRACE_FACILITY == 1)
+	vTracePrint(error_trace, "Exception encountered");
+#endif
+
+	for (;;)
+		;
 }
 /*-----------------------------------------------------------*/
 
-void vAssertCalled( const char * pcFile, unsigned long ulLine )
+void vAssertCalled(const char *pcFile, unsigned long ulLine)
 {
-volatile unsigned long ul = 0;
+	volatile unsigned long ul = 0;
 
-	( void ) pcFile;
-	( void ) ulLine;
+	(void)pcFile;
+	(void)ulLine;
 
-	__asm volatile( "di" );
+	__asm volatile("di");
 	{
 		/* Set ul to a non-zero value using the debugger to step out of this
 		function. */
-		while( ul == 0 )
+		while (ul == 0)
 		{
 			portNOP();
 		}
 	}
-	__asm volatile( "ei" );
+	__asm volatile("ei");
 }
 
 /*** end of file ***/
