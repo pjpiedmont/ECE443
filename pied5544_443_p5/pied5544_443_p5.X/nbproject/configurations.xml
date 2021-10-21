@@ -11,6 +11,8 @@
       <itemPath>../trcSnapshotConfig.h</itemPath>
       <itemPath>../IRlib.h</itemPath>
       <itemPath>../LCDlib.h</itemPath>
+      <itemPath>../GenericTypeDefs.h</itemPath>
+      <itemPath>../CANFunctions.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -34,6 +36,8 @@
       <itemPath>../main.c</itemPath>
       <itemPath>../IRlib.c</itemPath>
       <itemPath>../LCDlib.c</itemPath>
+      <itemPath>../can1_isr_wrapper.S</itemPath>
+      <itemPath>../can2_isr_wrapper.S</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
