@@ -96,12 +96,13 @@ static void pollBTN(void *pvParameters);
 static void printToLCD(void *pvParameters);
 static void switchMode(void *pvParameters);
 static void setTemp(void *pvParameters);
-static void sendPWM(void *pvParameters);
 static void requestData(void *pvParameters);
+static void sendPWM(void *pvParameters);
 static void CAN1RXHandler(void* pvParameters);
 
 // control unit functions
 float tempBinaryToFahrenheit(uint16_t tempBin);
+uint8_t calcPWM(float temp_curr, float temp_lo, float temp_hi);
 
 // I/O unit tasks
 static void readSensors(void *pvParameters);
@@ -132,6 +133,7 @@ SemaphoreHandle_t BTN2Pressed;
 SemaphoreHandle_t BTN3Pressed;
 
 SemaphoreHandle_t CAN1MsgRcvd;
+SemaphoreHandle_t CAN1MsgSaved;
 SemaphoreHandle_t CAN2MsgRcvd;
 
 
@@ -165,8 +167,9 @@ int main(void)
 	BTN2Pressed = xSemaphoreCreateBinary();
 	BTN3Pressed = xSemaphoreCreateBinary();
     
-    CAN1MsgRcvd = xSemaphoreCreateBinary();
-    CAN2MsgRcvd = xSemaphoreCreateBinary();
+    CAN1MsgRcvd  = xSemaphoreCreateBinary();
+    CAN1MsgSaved = xSemaphoreCreateBinary();
+    CAN2MsgRcvd  = xSemaphoreCreateBinary();
     
     qMode_ctrl     = xQueueCreate(1, sizeof(uint8_t));
     qTempCurr_ctrl = xQueueCreate(1, sizeof(float));
@@ -238,10 +241,15 @@ int main(void)
 		xTaskCreate(pollBTN, "BTN1 Poll", configMINIMAL_STACK_SIZE, &btn1_struct, 3, NULL);
 		xTaskCreate(pollBTN, "BTN2 Poll", configMINIMAL_STACK_SIZE, &btn2_struct, 3, NULL);
 		xTaskCreate(pollBTN, "BTN3 Poll", configMINIMAL_STACK_SIZE, &btn3_struct, 3, NULL);
+        
 		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 		xTaskCreate(switchMode, "Mode Switch", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+        
 		xTaskCreate(setTemp, "Low Temp Set", configMINIMAL_STACK_SIZE, &lo_struct, 2, NULL);
 		xTaskCreate(setTemp, "High Temp Set", configMINIMAL_STACK_SIZE, &hi_struct, 2, NULL);
+        
+        xTaskCreate(requestData, "Request Data", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(sendPWM, "PWM Send", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(CAN1RXHandler, "CAN1 RX Handler", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         
         xTaskCreate(readSensors, "Sensor Read", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
@@ -459,32 +467,93 @@ static void setTemp(void *pvParameters)
 	}
 }  /* end of setTemp -------------------------------------------------------- */
 
-static void sendPWM(void *pvParameters)
+static void requestData(void* pvParameters)
 {
-    // take semaphore 
+    CANTxMessageBuffer* message;
     
 	while (1)
 	{
-        // take semaphore
-		// construct data frame
-		// send data frame
-
-		LATBINV = LEDC;
-	}
-}  /* end of sendPWM -------------------------------------------------------- */
-
-static void requestData(void* pvParameters)
-{
-	while (1)
-	{
-		// construct RTR frame
-		// send RTR frame
-
+        message = CANGetTxMessageBuffer(CAN1, CAN_CHANNEL0);
+        
+        if (message != NULL)
+        {
+            // construct message
+            message->messageWord[0] = 0;
+            message->messageWord[1] = 0;
+            message->messageWord[2] = 0;
+            message->messageWord[3] = 0;
+            
+            message->msgSID.SID = (WORD) (CAN_EID_MSG_1 >> 18) & SID_MASK;
+            message->msgEID.EID = (WORD) CAN_EID_MSG_1 & EID_MASK;
+            
+            message->msgEID.SRR = 1;
+            message->msgEID.IDE = 1;
+            message->msgEID.RTR = 1;
+            message->msgEID.DLC = 0;
+        
+            // send RTR frame
+            CANUpdateChannel(CAN1, CAN_CHANNEL0);
+            CANFlushTxChannel(CAN1, CAN_CHANNEL0);
+        }
+		
 		LATBINV = LEDA;
         
         vTaskDelay(2000 / portTICK_RATE_MS);
 	}
 }  /* end of requestData ---------------------------------------------------- */
+
+static void sendPWM(void *pvParameters)
+{
+    float temp_curr;
+    float temp_lo;
+    float temp_hi;
+    uint8_t pwm;
+    
+    CANTxMessageBuffer* message;
+    
+    xSemaphoreTake(CAN1MsgSaved, 0);
+    
+	while (1)
+	{
+        xSemaphoreTake(CAN1MsgSaved, portMAX_DELAY);
+        
+        xQueuePeek(qTempCurr_ctrl, &temp_curr, 0);
+        xQueuePeek(qTempLo_ctrl, &temp_lo, 0);
+        xQueuePeek(qTempHi_ctrl, &temp_hi, 0);
+        
+        pwm = calcPWM(temp_curr, temp_lo, temp_hi);
+        xQueueOverwrite(qPWM_ctrl, &pwm);
+        
+        message = CANGetTxMessageBuffer(CAN1, CAN_CHANNEL0);
+        
+        if (message != NULL)
+        {            
+            // construct message
+            message->messageWord[0] = 0;
+            message->messageWord[1] = 0;
+            message->messageWord[2] = 0;
+            message->messageWord[3] = 0;
+            
+            message->msgSID.SID = (WORD) (CAN_EID_MSG_1 >> 18) & SID_MASK;
+            message->msgEID.EID = (WORD) CAN_EID_MSG_1 & EID_MASK;
+            
+            message->msgEID.SRR = 1;
+            message->msgEID.IDE = 1;
+            message->msgEID.RTR = 0;
+            message->msgEID.DLC = 1;
+            
+            message->data[0] = pwm;
+        
+            // send message
+            CANUpdateChannel(CAN1, CAN_CHANNEL0);
+            CANFlushTxChannel(CAN1, CAN_CHANNEL0);
+        }
+        
+//        vTaskDelay(1000 / portTICK_RATE_MS);
+
+		LATBINV = LEDC;
+	}
+}  /* end of sendPWM -------------------------------------------------------- */
 
 static void CAN1RXHandler(void* pvParameters)
 {
@@ -519,6 +588,8 @@ static void CAN1RXHandler(void* pvParameters)
         xQueueOverwrite(qPWM_ctrl, &pwm);
         xQueueOverwrite(qRPS_ctrl, &rps);
         
+        xSemaphoreGive(CAN1MsgSaved);
+        
         CANUpdateChannel(CAN1, CAN_CHANNEL1);
         CANEnableChannelEvent(CAN1, CAN_CHANNEL1, CAN_RX_CHANNEL_NOT_EMPTY, TRUE);
     }
@@ -540,6 +611,44 @@ float tempBinaryToFahrenheit(uint16_t tempBin)
     
     return fahrenheit;
 }  /* end of tempBinaryToFahrenheit ----------------------------------------- */
+
+uint8_t calcPWM(float temp_curr, float temp_lo, float temp_hi)
+{
+    uint8_t pwm;
+    
+    float temp_range;
+    float temp_diff;
+    float ratio;
+    
+    if (temp_curr < temp_lo)
+    {
+        pwm = 20;
+    }
+    else if (temp_curr > temp_hi)
+    {
+        pwm = 95;
+    }
+    else
+    {
+        temp_range = temp_hi - temp_lo;
+        temp_diff = temp_curr - temp_lo;
+        ratio = temp_diff / temp_range;
+        
+        pwm = (uint8_t)(35 + (ratio * 50));
+    }
+    
+    // make sure PWM doesn't get out of bounds
+    if (pwm > 95)
+    {
+        pwm = 95;
+    }
+    else if (pwm < 20)
+    {
+        pwm = 20;
+    }
+    
+    return pwm;
+}  /* end of calcPWM -------------------------------------------------------- */
 
 
 
@@ -572,11 +681,11 @@ static void sendData(void* pvParameters)
 
     int i;
     
-	// take semaphore (given by CAN2RXHandler)
-
+	xSemaphoreTake(CAN2MsgRcvd, 0);
+    
 	while (1)
 	{
-        // take semaphore
+        xSemaphoreTake(CAN2MsgRcvd, portMAX_DELAY);
         
         CANTxMessageBuffer* message;
         message = CANGetTxMessageBuffer(CAN2, CAN_CHANNEL0);
@@ -615,11 +724,11 @@ static void sendData(void* pvParameters)
             {
                 message->data[i] = sensorData.data[i];
             }
-        }
         
-		// send message
-        CANUpdateChannel(CAN2, CAN_CHANNEL0);
-        CANFlushTxChannel(CAN2, CAN_CHANNEL0);
+            // send message
+            CANUpdateChannel(CAN2, CAN_CHANNEL0);
+            CANFlushTxChannel(CAN2, CAN_CHANNEL0);
+        }
         
         vTaskDelay(1000 / portTICK_RATE_MS);
 	}
@@ -664,6 +773,11 @@ uint16_t readTemp(void)
     
     return temp;
 }  /* end of readTemp ------------------------------------------------------- */
+
+float readRPS(void)
+{
+    
+}  /* end of readRPS -------------------------------------------------------- */
 
 
 
