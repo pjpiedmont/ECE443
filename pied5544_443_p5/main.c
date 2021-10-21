@@ -22,6 +22,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
+#include "queue.h"
 
 /* Hardware specific includes. */
 #include "CerebotMX7cK.h" // JFF
@@ -44,9 +45,18 @@ typedef struct
 	unsigned int btn;
 	unsigned int port;
 	xSemaphoreHandle unblock;
-} btn_struct;
+} poll_btn_args_t;
+
+typedef struct
+{
+    QueueHandle_t queue;
+    xSemaphoreHandle unblock;
+} set_temp_args_t;
 
 /* CONSTANTS ================================================================ */
+
+#define OPERATE 1
+#define CONFIG  0
 
 // I2C configs
 #define FSCK 80000
@@ -62,11 +72,12 @@ static void pollBTN(void *pvParameters);
 static void printToLCD(void *pvParameters);
 static void switchMode(void *pvParameters);
 static void setTemp(void *pvParameters);
+//static void setLowTemp(void *pvParameters);
+//static void setHighTemp(void *pvParameters);
 static void sendPWM(void *pvParameters);
 static void requestData(void *pvParameters);
 
 // I/O unit tasks
-
 static void readSensors(void *pvParameters);
 static void sendData(void *pvParameters);
 
@@ -86,13 +97,18 @@ xSemaphoreHandle unblockSetHighTemp;
 
 /* GLOBAL VARIABLES ========================================================= */
 
-uint8_t mode;
+QueueHandle_t modeQ;
+QueueHandle_t tempCurrQ;
+QueueHandle_t tempLoQ;
+QueueHandle_t tempHiQ;
+QueueHandle_t pwmQ;
+QueueHandle_t rpsQ;
 
-float current_temp;
-float low_temp;
-float high_temp;
-int duty_cycle;
-float rps;
+//float current_temp = 0;
+//float low_temp = 0;
+//float high_temp = 0;
+//int duty_cycle = 0;
+//float rps = 0;
 
 /* TRACE STRINGS ============================================================ */
 
@@ -122,9 +138,40 @@ int main(void)
 	error_trace = xTraceRegisterString("Error");
 #endif
 
-	btn_struct btn1_struct;
-	btn_struct btn2_struct;
-	btn_struct btn3_struct;
+	LCD_init();
+    
+	unblockSwitchMode  = xSemaphoreCreateBinary();
+	unblockSetLowTemp  = xSemaphoreCreateBinary();
+	unblockSetHighTemp = xSemaphoreCreateBinary();
+    
+    modeQ     = xQueueCreate(1, sizeof(uint8_t));
+    tempCurrQ = xQueueCreate(1, sizeof(float));
+    tempLoQ   = xQueueCreate(1, sizeof(float));
+    tempHiQ   = xQueueCreate(1, sizeof(float));
+    pwmQ      = xQueueCreate(1, sizeof(uint8_t));
+    rpsQ      = xQueueCreate(1, sizeof(float));
+    
+	uint8_t mode    = CONFIG;
+    float temp_curr = 0;
+    float temp_lo   = -1000;
+    float temp_hi   = 1000;
+    uint8_t pwm     = 0;
+    float rps       = 0;
+    
+    xQueueSend(modeQ, &mode, 0);
+	LATGCLR = LED1;
+    xQueueSend(tempCurrQ, &temp_curr, 0);
+    xQueueSend(tempLoQ, &temp_lo, 0);
+    xQueueSend(tempHiQ, &temp_hi, 0);
+    xQueueSend(pwmQ, &pwm, 0);
+    xQueueSend(rpsQ, &rps, 0);
+
+//	low_temp = -10;
+//	high_temp = 10;
+    
+    poll_btn_args_t btn1_struct;
+	poll_btn_args_t btn2_struct;
+	poll_btn_args_t btn3_struct;
 
 	btn1_struct.btn = BTN1;
 	btn1_struct.port = IOPORT_G;
@@ -137,28 +184,26 @@ int main(void)
 	btn3_struct.btn = BTN3;
 	btn3_struct.port = IOPORT_A;
 	btn3_struct.unblock = unblockSetHighTemp;
+    
+    set_temp_args_t lo_struct;
+    set_temp_args_t hi_struct;
+    
+    lo_struct.queue = tempLoQ;
+    lo_struct.unblock = unblockSetLowTemp;
+    
+    hi_struct.queue = tempHiQ;
+    hi_struct.unblock = unblockSetHighTemp;
 
-	mode = 1;
-	LATGCLR = LED1;
-
-	low_temp = -1000;
-	high_temp = 1000;
-
-	//    LCD_init();
-	unblockSwitchMode = xSemaphoreCreateBinary();
-	unblockSetLowTemp = xSemaphoreCreateBinary();
-	unblockSetHighTemp = xSemaphoreCreateBinary();
-
-	if ((unblockSwitchMode != NULL) && (unblockSetLowTemp != NULL) && (unblockSetHighTemp != NULL))
+	if ((modeQ != NULL) && (unblockSwitchMode != NULL) && (unblockSetLowTemp != NULL) && (unblockSetHighTemp != NULL))
 	{
 		// create tasks and start scheduler
-		xTaskCreate(pollBTN, "BTN1 Poll", configMINIMAL_STACK_SIZE, (void *)btn1_struct, 2, NULL);
-		xTaskCreate(pollBTN, "BTN2 Poll", configMINIMAL_STACK_SIZE, (void *)btn2_struct, 2, NULL);
-		xTaskCreate(pollBTN, "BTN3 Poll", configMINIMAL_STACK_SIZE, (void *)btn3_struct, 2, NULL);
+		xTaskCreate(pollBTN, "BTN1 Poll", configMINIMAL_STACK_SIZE, &btn1_struct, 2, NULL);
+		xTaskCreate(pollBTN, "BTN2 Poll", configMINIMAL_STACK_SIZE, &btn2_struct, 2, NULL);
+		xTaskCreate(pollBTN, "BTN3 Poll", configMINIMAL_STACK_SIZE, &btn3_struct, 2, NULL);
 		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 		xTaskCreate(switchMode, "Mode Switch", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-		xTaskCreate(setLowTemp, "Low Temp Set", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-		xTaskCreate(setHighTemp, "High Temp Set", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+		xTaskCreate(setTemp, "Low Temp Set", configMINIMAL_STACK_SIZE, &lo_struct, 1, NULL);
+		xTaskCreate(setTemp, "High Temp Set", configMINIMAL_STACK_SIZE, &hi_struct, 1, NULL);
 
 		vTaskStartScheduler();
 	}
@@ -180,7 +225,11 @@ int main(void)
 
 static void pollBTN(void *pvParameters)
 {
-	btn_struct params = (btn_struct)pvParameters;
+	poll_btn_args_t* params = (poll_btn_args_t*)pvParameters;
+    
+    const unsigned int btn = params->btn;
+    const unsigned int port = params->port;
+    xSemaphoreHandle unblock = params->unblock;
 
 	unsigned int btn_curr = 0;
 	unsigned int btn_prev = 0;
@@ -190,15 +239,15 @@ static void pollBTN(void *pvParameters)
 
 	while (1)
 	{
-		btn_curr = PORTReadBits(params.port, params.btn);
+		btn_curr = PORTReadBits(port, btn);
 
 		if (btn_curr && !btn_prev) // if button has been pressed
 		{
 			vTaskDelay(20 / portTICK_RATE_MS);
 
-			if (PORTReadBits(params.port, params.btn))
+			if (PORTReadBits(port, btn))
 			{
-				xSemaphoreGive(params.unblock);
+				xSemaphoreGive(unblock);
 			}
 		}
 
@@ -210,72 +259,143 @@ static void pollBTN(void *pvParameters)
 
 static void printToLCD(void* pvParameters)
 {
-	char temp_curr[5];
-	char temp_lo[5];
-	char temp_hi[5];
-	char pwm[4];
-	char speed[6];
+    uint8_t mode;
+    float temp_curr;
+    float temp_lo;
+    float temp_hi;
+    uint8_t pwm;
+    float rps;
+    
+	char temp_curr_str[5];
+	char temp_lo_str[5];
+	char temp_hi_str[5];
+	char pwm_str[4];
+	char rps_str[6];
 
 	while (1)
 	{
-		sprintf(temp_curr, "%2.1f", current_temp);
-		sprintf(temp_lo, "%2.1f", low_temp);
-		sprintf(temp_hi, "%2.1f", high_temp);
-		sprintf(pwm, "%d\%", duty_cycle);
-		sprintf(speed, "%3.2f", rps);
+        xQueuePeek(modeQ, &mode, 0);
+        xQueuePeek(tempLoQ, &temp_lo, 0);
+        xQueuePeek(tempHiQ, &temp_hi, 0);
+                
+		sprintf(temp_curr_str, "%2.1f", temp_curr);
+		sprintf(temp_lo_str, "%2.1f", temp_lo);
+		sprintf(temp_hi_str, "%2.1f", temp_hi);
 
-		if (!mode)  // if operational mode
+		if (mode == OPERATE)
 		{
+            xQueuePeek(pwmQ, &pwm, 0);
+            xQueuePeek(rpsQ, &rps, 0);
+            
+            sprintf(pwm_str, "%d%%", pwm);
+            sprintf(rps_str, "%3.2f", rps);
+            
 			LCD_clear();
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(1, 6);
-			LCD_puts(temp_curr);
+			LCD_puts(temp_curr_str);
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(1, 0);
-			LCD_puts(temp_lo);
+			LCD_puts(temp_lo_str);
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(1, 12);
-			LCD_puts(temp_hi);
+			LCD_puts(temp_hi_str);
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(0, 0);
-			LCD_puts(pwm);
+			LCD_puts(pwm_str);
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(0, 10);
-			LCD_puts(speed);
+			LCD_puts(rps_str);
 		}
 		else  // if config mode
 		{
 			LCD_clear();
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(0, 6);
-			LCD_puts(temp_curr);
+			LCD_puts(temp_curr_str);
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(1, 0);
-			LCD_puts(temp_lo);
+			LCD_puts(temp_lo_str);
+            vTaskDelay(1);
 
 			LCD_set_cursor_pos(1, 12);
-			LCD_puts(temp_hi);
+			LCD_puts(temp_hi_str);
 		}
+        
+        vTaskDelay(100 / portTICK_RATE_MS);
 	}
 }
 
 static void switchMode(void *pvParameters)
 {
+    uint8_t mode;
+    uint8_t mode_next;
+    
+    float temp_lo;
+    float temp_hi;
+    
 	xSemaphoreTake(unblockSwitchMode, 0);
 
 	while (1)
 	{
 		xSemaphoreTake(unblockSwitchMode, portMAX_DELAY);
+        
+        xQueuePeek(modeQ, &mode, 0);
+        xQueuePeek(tempLoQ, &temp_lo, 0);
+        xQueuePeek(tempHiQ, &temp_hi, 0);
 
 		// if operational mode or config mode and temps set correctly
-		if (!mode || (mode && (low_temp > -1000) && (high_temp < 1000)))
+		if ((mode == OPERATE) || ((mode == CONFIG) && (temp_lo > -1000) && (temp_hi < 1000)))
 		{
-			// take mutex
-			mode = !mode;
-			// give mutex
+			if (mode == OPERATE)
+            {
+                mode_next = CONFIG;
+            }
+            else
+            {
+                mode_next = OPERATE;
+            }
+            
+            xQueueOverwrite(modeQ, &mode_next);
 
 			LATGINV = LED1;
 		}
+	}
+}
+
+static void setTemp(void *pvParameters)
+{
+    set_temp_args_t* params = (set_temp_args_t*)pvParameters;
+    QueueHandle_t queue = params->queue;
+    xSemaphoreHandle unblock = params->unblock;
+    
+    float temp_new;
+    
+	xSemaphoreTake(unblock, 0);
+
+	while (1)
+	{
+		xSemaphoreTake(unblock, portMAX_DELAY);
+        
+        temp_new = 89;
+        xQueueOverwrite(queue, &temp_new);
+
+		// send RTR frame
+		// take semaphore (given by CAN1 ISR)
+		// extract temp from response
+
+		// take mutex
+		// temp = can.temp;
+		// give mutex
+
+		LATBINV = LEDB;
 	}
 }
 
@@ -368,6 +488,10 @@ static void sendData(void* pvParameters)
 	}
 }
 
+/* INTERRUPT SERVICE ROUTINES =============================================== */
+
+
+
 /* SETUP FUNCTION DEFINITIONS =============================================== */
 
 /*!
@@ -426,8 +550,7 @@ void vApplicationMallocFailedHook(void)
 	to query the size of free heap space that remains (although it does not
 	provide information on how the remaining heap might be fragmented). */
 	taskDISABLE_INTERRUPTS();
-	for (;;)
-		;
+	for (;;);
 }
 /*-----------------------------------------------------------*/
 
@@ -451,8 +574,7 @@ void vApplicationIdleHook(void)
 	function, because it is the responsibility of the idle task to clean up
 	memory allocated by the kernel to any task that has since been deleted. */
 
-	while (1)
-		;
+	while (1);
 }
 /*-----------------------------------------------------------*/
 
@@ -466,8 +588,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
 	called if a task stack overflow is detected.  Note the system/interrupt
 	stack is not checked. */
 	taskDISABLE_INTERRUPTS();
-	for (;;)
-		;
+	for (;;);
 }
 /*-----------------------------------------------------------*/
 
@@ -490,8 +611,7 @@ void _general_exception_handler(unsigned long ulCause, unsigned long ulStatus)
 	vTracePrint(error_trace, "Exception encountered");
 #endif
 
-	for (;;)
-		;
+	for (;;);
 }
 /*-----------------------------------------------------------*/
 

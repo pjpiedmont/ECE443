@@ -178,11 +178,11 @@ void LCD_set_cursor_pos(int line, int pos)
     switch (line)
     {
         case 1:
-            writeLCD(0, 0x80 + pos);
+            writeLCD(0, 0xc0 + pos);
             break;
             
         default:
-            writeLCD(0, 0xc0 + pos);
+            writeLCD(0, 0x80 + pos);
             break;
     }
 }
