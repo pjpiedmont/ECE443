@@ -58,6 +58,19 @@ const int BRG_VAL = ((FPB / 2 / FSCK) - 2);
 // IR sensor configs
 const uint8_t SLAVE_ADDRESS = 0x5A;
 
+// Timer 2 ticks per ms when PBCLK = 10 MHz
+#define T2_TICKS_PER_MS    10000
+
+// Set initial duty cycle to 50%
+#define DUTY_CYCLE_INIT    (T2_TICKS_PER_MS / 2)
+
+#define MTR_SA    (1 << 3)
+#define MTR_SB    (1 << 12)
+
+// Find number of ticks for duty cycle
+// dutyCycle must be a float for this to work
+#define duty_cycle_to_ticks(dutyCycle)    (dutyCycle * T2_TICKS_PER_MS)
+
 
 
 /* DATA STRUCTURES ========================================================== */
@@ -123,6 +136,10 @@ static void prvSetupHardware(void);
 void PMP_init(void);
 void CAN1Init(void);
 void CAN2Init(void);
+void OC3_init(void);
+void input_capture_interrupt_initialize(void);
+void timer2_interrupt_initialize(void);
+void timer3_interrupt_initialize(void);
 
 
 
@@ -135,6 +152,14 @@ SemaphoreHandle_t BTN3Pressed;
 SemaphoreHandle_t CAN1MsgRcvd;
 SemaphoreHandle_t CAN1MsgSaved;
 SemaphoreHandle_t CAN2MsgRcvd;
+
+/* isCAN1MsgReceived is true if CAN1 FIFO1 received a message. This flag is
+ * updated in the CAN1 ISR. */
+static volatile BOOL isCAN1MsgReceived = FALSE;
+
+/* isCAN2MsgReceived is true if CAN2 FIFO1 received
+ * a message. This flag is updated in the CAN2 ISR. */
+static volatile BOOL isCAN2MsgReceived = FALSE;
 
 
 
@@ -161,8 +186,6 @@ int main(void)
 {
 	prvSetupHardware(); /*  Configure hardware */
 
-	LCD_init();
-    
 	BTN1Pressed = xSemaphoreCreateBinary();
 	BTN2Pressed = xSemaphoreCreateBinary();
 	BTN3Pressed = xSemaphoreCreateBinary();
@@ -730,7 +753,7 @@ static void sendData(void* pvParameters)
             CANFlushTxChannel(CAN2, CAN_CHANNEL0);
         }
         
-        vTaskDelay(1000 / portTICK_RATE_MS);
+//        vTaskDelay(1000 / portTICK_RATE_MS);
 	}
 }  /* end of sendData ------------------------------------------------------- */
 
@@ -796,6 +819,7 @@ float readRPS(void)
  * Remarks:         ISR cannot be called directly.
   ***************************************************************************/
 void CAN1InterruptHandler(void)
+//void __ISR(_CAN_1_VECTOR, ipl4) CAN1InterruptHandler(void)
 {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 
@@ -824,6 +848,7 @@ void CAN1InterruptHandler(void)
                                     FALSE);
 
             xSemaphoreGiveFromISR(CAN1MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
+            isCAN1MsgReceived = TRUE;    /* CAN Message received flag */
         }
     }
 
@@ -848,6 +873,7 @@ void CAN1InterruptHandler(void)
  * Remarks:         ISR cannot be called directly
   ***************************************************************************/
 void CAN2InterruptHandler(void)
+//void __ISR(_CAN_2_VECTOR, ipl4) CAN2InterruptHandler(void)
 {  
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 /* Check if the source of the interrupt is RX_EVENT. This is redundant since 
@@ -877,6 +903,7 @@ void CAN2InterruptHandler(void)
                                     FALSE);
 
             xSemaphoreGiveFromISR(CAN2MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
+            isCAN2MsgReceived = TRUE;    /* CAN Message received flag */
         }
     }
 
@@ -888,6 +915,56 @@ void CAN2InterruptHandler(void)
 	
     INTClearFlag(INT_CAN2);
 } /* enD OF CAN2InterruptHandler(void) */
+
+void __ISR(_TIMER_2_VECTOR, IPL2) Timer2Handler(void)
+{
+    LATBINV = LEDA;
+    mT2ClearIntFlag();
+}
+
+void __ISR(_TIMER_3_VECTOR, IPL2) T3Interrupt(void)
+{
+    LATBINV = LEDC;
+    mT3ClearIntFlag();
+}
+
+void __ISR(_INPUT_CAPTURE_5_VECTOR, IPL3) Capture5(void)
+{
+    static unsigned int con_buf[4];  // Declare an input capture buffer
+
+    // Declare three time capture variables: 
+    static unsigned short int t_new;      // Most recent captured time
+    static unsigned short int t_old = 0;  // Previous time capture
+    static unsigned short int time_diff;  // Time between captures
+
+    static unsigned short int t_arr[16];
+    static unsigned short int *t_arr_ptr = t_arr;
+
+    unsigned int sum = 0;
+
+    LATBINV = LEDD;  // Toggle LEDD on each input capture interrupt
+
+    ReadCapture5(con_buf);  // Read captures into buffer
+
+    t_new = con_buf[0];         // Save time of event
+    time_diff = t_new - t_old;  // Compute elapsed time in timer ticks
+    t_old = t_new;              // Replace previous time capture with new
+
+    *t_arr_ptr = time_diff;     // Save elapsed time to array
+    t_arr_ptr++;                // Advance array pointer
+
+    if (t_arr_ptr > t_arr + 15)    // Wrap around to start of array
+        t_arr_ptr = t_arr;
+
+    int i;
+    for (i = 0; i < 16; i++)
+        sum += t_arr[i];
+    
+    // rps = # of measurements * T3 ticks per ms * ms per s / sum of ticks
+    rps = (16 * 39.0625f * 1000) / sum;
+
+    mIC5ClearIntFlag();
+}
 
 
 
@@ -913,6 +990,7 @@ static void prvSetupHardware(void)
     CAN2Init();
 
 	PMP_init();
+    LCD_init();
 	OpenI2C1(I2C_EN, BRG_VAL);
 
 	/* Enable multi-vector interrupts */
@@ -1203,6 +1281,44 @@ void CAN2Init(void)
     CANSetOperatingMode(CAN2, CAN_NORMAL_OPERATION);
     while(CANGetOperatingMode(CAN2) != CAN_NORMAL_OPERATION);
 } /* End of CAN2Init */
+
+void OC3_init(void)
+{
+    mOC3ClearIntFlag();
+    OpenOC3(OC_ON | OC_TIMER_MODE16 | OC_TIMER2_SRC | OC_PWM_FAULT_PIN_DISABLE, 
+            DUTY_CYCLE_INIT, DUTY_CYCLE_INIT);
+}  /* end of OC3_init ------------------------------------------------------- */
+
+void timer2_interrupt_initialize(void)
+{
+    // Configure Timer 2 with internal clock, 1:1 prescale, PR2 for 1 ms period
+    OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, T2_TICKS_PER_MS - 1);
+    
+    // Set up the timer interrupt with a priority of 2, sub priority 0
+    mT2SetIntPriority(2);
+    mT2SetIntSubPriority(1);
+    mT2IntEnable(1);
+}  /* end of timer2_interrupt_initialize ------------------------------------ */
+
+void timer3_interrupt_initialize(void)
+{
+    // Configure Timer 2 with internal clock, 1:1 prescale, PR2 for 1 ms period
+    OpenTimer3(T3_ON | T3_SOURCE_INT | T3_PS_1_256, 0xffff);
+    
+    // Set up the timer interrupt with a priority of 2, sub priority 0
+    mT3SetIntPriority(2);
+    mT3SetIntSubPriority(2);
+    mT3IntEnable(1);
+}  /* end of timer3_interrupt_initialize ------------------------------------ */
+
+void input_capture_interrupt_initialize(void)
+{
+    PORTSetPinsDigitalIn(IOPORT_D, MTR_SA | MTR_SB);
+    mIC5ClearIntFlag();
+    OpenCapture5(IC_ON | IC_CAP_16BIT | IC_IDLE_STOP | IC_FEDGE_FALL | 
+                 IC_TIMER3_SRC | IC_INT_1CAPTURE | IC_EVERY_FALL_EDGE);
+    ConfigIntCapture5(IC_INT_ON | IC_INT_PRIOR_3 | IC_INT_SUB_PRIOR_0);
+}  /* end of input_capture_interrupt_initialize ----------------------------- */
 
 
 
