@@ -151,7 +151,9 @@ SemaphoreHandle_t BTN3Pressed;
 
 SemaphoreHandle_t CAN1MsgRcvd;
 SemaphoreHandle_t CAN1MsgSaved;
+
 SemaphoreHandle_t CAN2MsgRcvd;
+SemaphoreHandle_t CAN2Request;
 
 /* isCAN1MsgReceived is true if CAN1 FIFO1 received a message. This flag is
  * updated in the CAN1 ISR. */
@@ -192,7 +194,9 @@ int main(void)
     
     CAN1MsgRcvd  = xSemaphoreCreateBinary();
     CAN1MsgSaved = xSemaphoreCreateBinary();
-    CAN2MsgRcvd  = xSemaphoreCreateBinary();
+    
+    CAN2MsgRcvd = xSemaphoreCreateBinary();
+    CAN2Request = xSemaphoreCreateBinary();
     
     qMode_ctrl     = xQueueCreate(1, sizeof(uint8_t));
     qTempCurr_ctrl = xQueueCreate(1, sizeof(float));
@@ -277,6 +281,7 @@ int main(void)
         
         xTaskCreate(readSensors, "Sensor Read", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
         xTaskCreate(sendData, "Send Data", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(CAN2RXHandler, "CAN2 RX Handler", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
 		vTaskStartScheduler();
 	}
@@ -506,8 +511,8 @@ static void requestData(void* pvParameters)
             message->messageWord[2] = 0;
             message->messageWord[3] = 0;
             
-            message->msgSID.SID = (WORD) (CAN_EID_MSG_1 >> 18) & SID_MASK;
-            message->msgEID.EID = (WORD) CAN_EID_MSG_1 & EID_MASK;
+            message->msgSID.SID = (WORD) (CAN_EID_MSG_4 >> 18) & SID_MASK;
+            message->msgEID.EID = (WORD) CAN_EID_MSG_4 & EID_MASK;
             
             message->msgEID.SRR = 1;
             message->msgEID.IDE = 1;
@@ -557,8 +562,8 @@ static void sendPWM(void *pvParameters)
             message->messageWord[2] = 0;
             message->messageWord[3] = 0;
             
-            message->msgSID.SID = (WORD) (CAN_EID_MSG_1 >> 18) & SID_MASK;
-            message->msgEID.EID = (WORD) CAN_EID_MSG_1 & EID_MASK;
+            message->msgSID.SID = (WORD) (CAN_EID_MSG_4 >> 18) & SID_MASK;
+            message->msgEID.EID = (WORD) CAN_EID_MSG_4 & EID_MASK;
             
             message->msgEID.SRR = 1;
             message->msgEID.IDE = 1;
@@ -583,7 +588,8 @@ static void CAN1RXHandler(void* pvParameters)
     CANRxMessageBuffer* message;
     
     CAN_data_t sensorData;
-    float temp;
+    uint16_t tempBin;
+    float tempF;
     uint8_t pwm;
     float rps;
     
@@ -603,11 +609,13 @@ static void CAN1RXHandler(void* pvParameters)
             sensorData.data[i] = message->data[i];
         }
         
-        temp = sensorData.temp;
+        tempBin = sensorData.temp;
         pwm = sensorData.pwm;
         rps = sensorData.rps;
         
-        xQueueOverwrite(qTempCurr_ctrl, &temp);
+        tempF = tempBinaryToFahrenheit(tempBin);
+        
+        xQueueOverwrite(qTempCurr_ctrl, &tempF);
         xQueueOverwrite(qPWM_ctrl, &pwm);
         xQueueOverwrite(qRPS_ctrl, &rps);
         
@@ -697,6 +705,8 @@ static void readSensors(void* pvParameters)
 
 static void sendData(void* pvParameters)
 {
+    CANTxMessageBuffer* message;
+    
     CAN_data_t sensorData;
     uint16_t temp;
     uint8_t pwm;
@@ -704,13 +714,12 @@ static void sendData(void* pvParameters)
 
     int i;
     
-	xSemaphoreTake(CAN2MsgRcvd, 0);
+	xSemaphoreTake(CAN2Request, 0);
     
 	while (1)
 	{
-        xSemaphoreTake(CAN2MsgRcvd, portMAX_DELAY);
+        xSemaphoreTake(CAN2Request, portMAX_DELAY);
         
-        CANTxMessageBuffer* message;
         message = CANGetTxMessageBuffer(CAN2, CAN_CHANNEL0);
         
         if (message != NULL)
@@ -735,8 +744,8 @@ static void sendData(void* pvParameters)
             message->messageWord[2] = 0;
             message->messageWord[3] = 0;
             
-            message->msgSID.SID = (WORD) (CAN_EID_MSG_4 >> 18) & SID_MASK;
-            message->msgEID.EID = (WORD) CAN_EID_MSG_4 & EID_MASK;
+            message->msgSID.SID = (WORD) (CAN_EID_MSG_1 >> 18) & SID_MASK;
+            message->msgEID.EID = (WORD) CAN_EID_MSG_1 & EID_MASK;
             
             message->msgEID.SRR = 1;
             message->msgEID.IDE = 1;
@@ -761,6 +770,9 @@ static void CAN2RXHandler(void* pvParameters)
 {
     CANRxMessageBuffer* message;
     
+    uint8_t rtr;
+    uint8_t pwm;
+    
     xSemaphoreTake(CAN2MsgRcvd, 0);
     
     while (1)
@@ -770,6 +782,16 @@ static void CAN2RXHandler(void* pvParameters)
         message = (CANRxMessageBuffer*)CANGetRxMessage(CAN2, CAN_CHANNEL1);
         
         // handle message types here
+        rtr = message->msgEID.RTR;
+        
+        if (rtr)
+        {
+            xSemaphoreGive(CAN2Request);
+        }
+        else
+        {
+            pwm = message->data[0];
+        }
         
         CANUpdateChannel(CAN2, CAN_CHANNEL1);
         CANEnableChannelEvent(CAN2, CAN_CHANNEL1, CAN_RX_CHANNEL_NOT_EMPTY, TRUE);
@@ -819,7 +841,6 @@ float readRPS(void)
  * Remarks:         ISR cannot be called directly.
   ***************************************************************************/
 void CAN1InterruptHandler(void)
-//void __ISR(_CAN_1_VECTOR, ipl4) CAN1InterruptHandler(void)
 {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 
@@ -848,7 +869,7 @@ void CAN1InterruptHandler(void)
                                     FALSE);
 
             xSemaphoreGiveFromISR(CAN1MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
-            isCAN1MsgReceived = TRUE;    /* CAN Message received flag */
+//            isCAN1MsgReceived = TRUE;    /* CAN Message received flag */
         }
     }
 
@@ -873,7 +894,6 @@ void CAN1InterruptHandler(void)
  * Remarks:         ISR cannot be called directly
   ***************************************************************************/
 void CAN2InterruptHandler(void)
-//void __ISR(_CAN_2_VECTOR, ipl4) CAN2InterruptHandler(void)
 {  
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 /* Check if the source of the interrupt is RX_EVENT. This is redundant since 
@@ -903,7 +923,7 @@ void CAN2InterruptHandler(void)
                                     FALSE);
 
             xSemaphoreGiveFromISR(CAN2MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
-            isCAN2MsgReceived = TRUE;    /* CAN Message received flag */
+//            isCAN2MsgReceived = TRUE;    /* CAN Message received flag */
         }
     }
 
@@ -930,6 +950,7 @@ void __ISR(_TIMER_3_VECTOR, IPL2) T3Interrupt(void)
 
 void __ISR(_INPUT_CAPTURE_5_VECTOR, IPL3) Capture5(void)
 {
+    /*
     static unsigned int con_buf[4];  // Declare an input capture buffer
 
     // Declare three time capture variables: 
@@ -964,6 +985,7 @@ void __ISR(_INPUT_CAPTURE_5_VECTOR, IPL3) Capture5(void)
     rps = (16 * 39.0625f * 1000) / sum;
 
     mIC5ClearIntFlag();
+     * */
 }
 
 
