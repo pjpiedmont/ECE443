@@ -49,7 +49,7 @@
 #define OPERATE  1
 #define CONFIG   0
 
-#define SENSOR_DATA_LEN  7
+#define SENSOR_DATA_LEN  8
 
 // I2C configs
 #define FSCK 80000
@@ -62,7 +62,7 @@ const uint8_t SLAVE_ADDRESS = 0x5A;
 #define T2_TICKS_PER_MS    10000
 
 // Set initial duty cycle to 50%
-#define DUTY_CYCLE_INIT    (T2_TICKS_PER_MS / 2)
+#define DUTY_CYCLE_INIT    0
 
 #define MTR_SA    (1 << 3)
 #define MTR_SB    (1 << 12)
@@ -119,6 +119,8 @@ uint8_t calcPWM(float temp_curr, float temp_lo, float temp_hi);
 
 // I/O unit tasks
 static void readSensors(void *pvParameters);
+static void calcRPS(void* pvParameters);
+static void setPWM(void* pvParameters);
 static void sendData(void *pvParameters);
 static void CAN2RXHandler(void* pvParameters);
 
@@ -130,6 +132,8 @@ void __attribute__( (interrupt(ipl4),
                      vector(_CAN_1_VECTOR))) CAN1InterruptHandler(void);
 void __attribute__( (interrupt(ipl4),
                      vector(_CAN_2_VECTOR))) CAN2InterruptHandler(void);
+void __attribute__( (interrupt(ipl3),
+                     vector(_INPUT_CAPTURE_5_VECTOR))) IC5IntHandler(void);
 
 // hardware setup
 static void prvSetupHardware(void);
@@ -138,8 +142,6 @@ void CAN1Init(void);
 void CAN2Init(void);
 void OC3_init(void);
 void input_capture_interrupt_initialize(void);
-void timer2_interrupt_initialize(void);
-void timer3_interrupt_initialize(void);
 
 
 
@@ -148,20 +150,13 @@ void timer3_interrupt_initialize(void);
 SemaphoreHandle_t BTN1Pressed;
 SemaphoreHandle_t BTN2Pressed;
 SemaphoreHandle_t BTN3Pressed;
-
 SemaphoreHandle_t CAN1MsgRcvd;
 SemaphoreHandle_t CAN1MsgSaved;
 
 SemaphoreHandle_t CAN2MsgRcvd;
 SemaphoreHandle_t CAN2Request;
-
-/* isCAN1MsgReceived is true if CAN1 FIFO1 received a message. This flag is
- * updated in the CAN1 ISR. */
-static volatile BOOL isCAN1MsgReceived = FALSE;
-
-/* isCAN2MsgReceived is true if CAN2 FIFO1 received
- * a message. This flag is updated in the CAN2 ISR. */
-static volatile BOOL isCAN2MsgReceived = FALSE;
+SemaphoreHandle_t PWMRcvd;
+SemaphoreHandle_t MotorPeriodDetected;
 
 
 
@@ -179,6 +174,8 @@ QueueHandle_t qRPS_ctrl;
 QueueHandle_t qTemp_io;
 QueueHandle_t qPWM_io;
 QueueHandle_t qRPS_io;
+QueueHandle_t ic5_cap;
+QueueHandle_t ic5_sum;
 
 
 
@@ -188,15 +185,16 @@ int main(void)
 {
 	prvSetupHardware(); /*  Configure hardware */
 
-	BTN1Pressed = xSemaphoreCreateBinary();
-	BTN2Pressed = xSemaphoreCreateBinary();
-	BTN3Pressed = xSemaphoreCreateBinary();
-    
+	BTN1Pressed  = xSemaphoreCreateBinary();
+	BTN2Pressed  = xSemaphoreCreateBinary();
+	BTN3Pressed  = xSemaphoreCreateBinary();
     CAN1MsgRcvd  = xSemaphoreCreateBinary();
     CAN1MsgSaved = xSemaphoreCreateBinary();
     
-    CAN2MsgRcvd = xSemaphoreCreateBinary();
-    CAN2Request = xSemaphoreCreateBinary();
+    CAN2MsgRcvd         = xSemaphoreCreateBinary();
+    CAN2Request         = xSemaphoreCreateBinary();
+    PWMRcvd             = xSemaphoreCreateBinary();
+    MotorPeriodDetected = xSemaphoreCreateBinary();
     
     qMode_ctrl     = xQueueCreate(1, sizeof(uint8_t));
     qTempCurr_ctrl = xQueueCreate(1, sizeof(float));
@@ -208,6 +206,8 @@ int main(void)
     qTemp_io = xQueueCreate(1, sizeof(float));
     qPWM_io  = xQueueCreate(1, sizeof(uint8_t));
     qRPS_io  = xQueueCreate(1, sizeof(float));
+    ic5_cap  = xQueueCreate(1, sizeof(unsigned int));
+    ic5_sum  = xQueueCreate(1, sizeof(unsigned int));
     
     // initialize queues
 	uint8_t mode_ctrl    = CONFIG;
@@ -217,9 +217,11 @@ int main(void)
     uint8_t pwm_ctrl     = 0;
     float rps_ctrl       = 0;
     
-    float temp_io  = 0;
-    uint8_t pwm_io = 20;
-    float rps_io   = 121;
+    float temp_io    = 0;
+    uint8_t pwm_io   = 0;
+    float rps_io     = 0;
+    unsigned int cap = 0;
+    unsigned int sum = 0;
     
     LATGCLR = LED1;
     
@@ -233,6 +235,8 @@ int main(void)
     xQueueSend(qTemp_io, &temp_io, 0);
     xQueueSend(qPWM_io, &pwm_io, 0);
     xQueueSend(qRPS_io, &rps_io, 0);
+    xQueueSend(ic5_cap, &cap, 0);
+    xQueueSend(ic5_sum, &sum, 0);
     
     poll_btn_args_t btn1_struct;
 	poll_btn_args_t btn2_struct;
@@ -279,8 +283,10 @@ int main(void)
         xTaskCreate(sendPWM, "PWM Send", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(CAN1RXHandler, "CAN1 RX Handler", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         
-        xTaskCreate(readSensors, "Sensor Read", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-        xTaskCreate(sendData, "Send Data", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+        xTaskCreate(readSensors, "Sensor Read", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+        xTaskCreate(calcRPS, "RPS Calc", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+        xTaskCreate(setPWM, "PWM Output", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+        xTaskCreate(sendData, "Send Data", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(CAN2RXHandler, "CAN2 RX Handler", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
 		vTaskStartScheduler();
@@ -393,7 +399,15 @@ static void printToLCD(void* pvParameters)
 			LCD_puts(temp_lo_str);
             vTaskDelay(1);
 
-			LCD_set_cursor_pos(1, 12);
+			if ((temp_hi > 100) || (temp_hi < 0))
+            {
+                LCD_set_cursor_pos(1, 11);
+            }
+            else
+            {
+                LCD_set_cursor_pos(1, 12);
+            }
+            
 			LCD_puts(temp_hi_str);
             vTaskDelay(1);
 
@@ -417,7 +431,15 @@ static void printToLCD(void* pvParameters)
 			LCD_puts(temp_lo_str);
             vTaskDelay(1);
 
-			LCD_set_cursor_pos(1, 12);
+            if ((temp_hi > 100) || (temp_hi < 0))
+            {
+                LCD_set_cursor_pos(1, 11);
+            }
+            else
+            {
+                LCD_set_cursor_pos(1, 12);
+            }
+            
 			LCD_puts(temp_hi_str);
 		}
         
@@ -549,8 +571,11 @@ static void sendPWM(void *pvParameters)
         xQueuePeek(qTempLo_ctrl, &temp_lo, 0);
         xQueuePeek(qTempHi_ctrl, &temp_hi, 0);
         
-        pwm = calcPWM(temp_curr, temp_lo, temp_hi);
-        xQueueOverwrite(qPWM_ctrl, &pwm);
+        if ((temp_lo > -1000) && (temp_hi < 1000))
+        {
+            pwm = calcPWM(temp_curr, temp_lo, temp_hi);
+            xQueueOverwrite(qPWM_ctrl, &pwm);
+        }
         
         message = CANGetTxMessageBuffer(CAN1, CAN_CHANNEL0);
         
@@ -600,6 +625,8 @@ static void CAN1RXHandler(void* pvParameters)
     while (1)
     {
         xSemaphoreTake(CAN1MsgRcvd, portMAX_DELAY);
+        
+        LATBINV = LEDB;
         
         message = (CANRxMessageBuffer*)CANGetRxMessage(CAN1, CAN_CHANNEL1);
         
@@ -690,18 +717,87 @@ static void readSensors(void* pvParameters)
     uint16_t temp;
     float fahrenheit;
     
+    unsigned int sum;
+    float rps;
+    
 	while (1)
 	{
 		// read
         temp = readTemp();
         xQueueOverwrite(qTemp_io, &temp);
         
-//        fahrenheit = tempBinaryToFahrenheit(temp);
-//        xQueueOverwrite(qTempCurr_ctrl, &fahrenheit);
+        xQueuePeek(ic5_sum, &sum, 0);
+        
+        // rps = # of measurements * T3 ticks per ms * ms per s / sum of ticks
+        rps = (16 * 39.0625f * 1000) / sum;
+        xQueueOverwrite(qRPS_io, &rps);
         
         vTaskDelay(500 / portTICK_RATE_MS);
 	}
 }  /* end of readSensors ---------------------------------------------------- */
+
+static void calcRPS(void* pvParameters)
+{
+    unsigned int cap;
+
+    // Declare three time capture variables: 
+    unsigned short int t_new;      // Most recent captured time
+    unsigned short int t_old = 0;  // Previous time capture
+    unsigned short int time_diff;  // Time between captures
+
+    unsigned short int t_arr[16];
+    unsigned short int *t_arr_ptr = t_arr;
+
+    unsigned int sum = 0;
+    
+    xSemaphoreTake(MotorPeriodDetected, 0);
+
+    while (1)
+    {
+        xSemaphoreTake(MotorPeriodDetected, portMAX_DELAY);
+        
+        xQueueReceive(ic5_cap, &cap, 0);
+
+        t_new = cap;         // Save time of event
+        time_diff = t_new - t_old;  // Compute elapsed time in timer ticks
+        t_old = t_new;              // Replace previous time capture with new
+
+        *t_arr_ptr = time_diff;     // Save elapsed time to array
+        t_arr_ptr++;                // Advance array pointer
+
+        if (t_arr_ptr > t_arr + 15)    // Wrap around to start of array
+            t_arr_ptr = t_arr;
+
+        sum = 0;
+        
+        int i;
+        for (i = 0; i < 16; i++)
+            sum += t_arr[i];
+        
+        xQueueOverwrite(ic5_sum, &sum);
+    }
+}  /* end of calcRPS -------------------------------------------------------- */
+
+static void setPWM(void* pvParameters)
+{
+    uint8_t pwm;
+    float pwm_f;
+    unsigned int duty_cycle_ticks;
+    
+    xSemaphoreTake(PWMRcvd, 0);
+    
+    while (1)
+    {
+        xSemaphoreTake(PWMRcvd, portMAX_DELAY);
+        
+        xQueuePeek(qPWM_io, &pwm, 0);
+        pwm_f = pwm / 100.0f;
+        duty_cycle_ticks = (unsigned int)duty_cycle_to_ticks(pwm_f);
+        SetDCOC3PWM(duty_cycle_ticks);
+        
+        LATBINV = LEDD;
+    }
+}
 
 static void sendData(void* pvParameters)
 {
@@ -791,6 +887,8 @@ static void CAN2RXHandler(void* pvParameters)
         else
         {
             pwm = message->data[0];
+            xQueueOverwrite(qPWM_io, &pwm);
+            xSemaphoreGive(PWMRcvd);
         }
         
         CANUpdateChannel(CAN2, CAN_CHANNEL1);
@@ -869,7 +967,6 @@ void CAN1InterruptHandler(void)
                                     FALSE);
 
             xSemaphoreGiveFromISR(CAN1MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
-//            isCAN1MsgReceived = TRUE;    /* CAN Message received flag */
         }
     }
 
@@ -923,7 +1020,6 @@ void CAN2InterruptHandler(void)
                                     FALSE);
 
             xSemaphoreGiveFromISR(CAN2MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
-//            isCAN2MsgReceived = TRUE;    /* CAN Message received flag */
         }
     }
 
@@ -936,56 +1032,19 @@ void CAN2InterruptHandler(void)
     INTClearFlag(INT_CAN2);
 } /* enD OF CAN2InterruptHandler(void) */
 
-void __ISR(_TIMER_2_VECTOR, IPL2) Timer2Handler(void)
+void IC5IntHandler(void)
 {
-    LATBINV = LEDA;
-    mT2ClearIntFlag();
-}
-
-void __ISR(_TIMER_3_VECTOR, IPL2) T3Interrupt(void)
-{
-    LATBINV = LEDC;
-    mT3ClearIntFlag();
-}
-
-void __ISR(_INPUT_CAPTURE_5_VECTOR, IPL3) Capture5(void)
-{
-    /*
-    static unsigned int con_buf[4];  // Declare an input capture buffer
-
-    // Declare three time capture variables: 
-    static unsigned short int t_new;      // Most recent captured time
-    static unsigned short int t_old = 0;  // Previous time capture
-    static unsigned short int time_diff;  // Time between captures
-
-    static unsigned short int t_arr[16];
-    static unsigned short int *t_arr_ptr = t_arr;
-
-    unsigned int sum = 0;
-
-    LATBINV = LEDD;  // Toggle LEDD on each input capture interrupt
-
-    ReadCapture5(con_buf);  // Read captures into buffer
-
-    t_new = con_buf[0];         // Save time of event
-    time_diff = t_new - t_old;  // Compute elapsed time in timer ticks
-    t_old = t_new;              // Replace previous time capture with new
-
-    *t_arr_ptr = time_diff;     // Save elapsed time to array
-    t_arr_ptr++;                // Advance array pointer
-
-    if (t_arr_ptr > t_arr + 15)    // Wrap around to start of array
-        t_arr_ptr = t_arr;
-
-    int i;
-    for (i = 0; i < 16; i++)
-        sum += t_arr[i];
+    unsigned int cap_buf[4];
+    unsigned int cap;
+    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     
-    // rps = # of measurements * T3 ticks per ms * ms per s / sum of ticks
-    rps = (16 * 39.0625f * 1000) / sum;
-
+    ReadCapture5(cap_buf);  // Read captures into buffer
+    cap = cap_buf[0];
+    
+    xQueueSendFromISR(ic5_cap, &cap, &xHigherPriorityTaskWoken);
+    xSemaphoreGiveFromISR(MotorPeriodDetected, &xHigherPriorityTaskWoken);
+    
     mIC5ClearIntFlag();
-     * */
 }
 
 
@@ -1008,12 +1067,21 @@ static void prvSetupHardware(void)
 	PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
 	LATBCLR = SM_LEDS; /* Clear all SM LED bits */
     
+    // Configure Timer 2 with internal clock, 1:1 prescale, PR2 for 1 ms period
+    OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, T2_TICKS_PER_MS - 1);
+    
+    // Configure Timer 3 with internal clock, 1:256 prescale, max period
+    OpenTimer3(T3_ON | T3_SOURCE_INT | T3_PS_1_256, 0xffff);
+    
     CAN1Init();
     CAN2Init();
 
 	PMP_init();
     LCD_init();
+    
 	OpenI2C1(I2C_EN, BRG_VAL);
+    OC3_init();
+    input_capture_interrupt_initialize();
 
 	/* Enable multi-vector interrupts */
 	INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR); /* Do only once */
@@ -1310,28 +1378,6 @@ void OC3_init(void)
     OpenOC3(OC_ON | OC_TIMER_MODE16 | OC_TIMER2_SRC | OC_PWM_FAULT_PIN_DISABLE, 
             DUTY_CYCLE_INIT, DUTY_CYCLE_INIT);
 }  /* end of OC3_init ------------------------------------------------------- */
-
-void timer2_interrupt_initialize(void)
-{
-    // Configure Timer 2 with internal clock, 1:1 prescale, PR2 for 1 ms period
-    OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, T2_TICKS_PER_MS - 1);
-    
-    // Set up the timer interrupt with a priority of 2, sub priority 0
-    mT2SetIntPriority(2);
-    mT2SetIntSubPriority(1);
-    mT2IntEnable(1);
-}  /* end of timer2_interrupt_initialize ------------------------------------ */
-
-void timer3_interrupt_initialize(void)
-{
-    // Configure Timer 2 with internal clock, 1:1 prescale, PR2 for 1 ms period
-    OpenTimer3(T3_ON | T3_SOURCE_INT | T3_PS_1_256, 0xffff);
-    
-    // Set up the timer interrupt with a priority of 2, sub priority 0
-    mT3SetIntPriority(2);
-    mT3SetIntSubPriority(2);
-    mT3IntEnable(1);
-}  /* end of timer3_interrupt_initialize ------------------------------------ */
 
 void input_capture_interrupt_initialize(void)
 {

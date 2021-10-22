@@ -38,6 +38,7 @@
       <itemPath>../LCDlib.c</itemPath>
       <itemPath>../can1_isr_wrapper.S</itemPath>
       <itemPath>../can2_isr_wrapper.S</itemPath>
+      <itemPath>../ic5_isr_wrapper.S</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
