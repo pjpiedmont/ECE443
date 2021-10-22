@@ -147,12 +147,14 @@ void input_capture_interrupt_initialize(void);
 
 /* TASK SIGNALS ============================================================= */
 
+// control unit
 SemaphoreHandle_t BTN1Pressed;
 SemaphoreHandle_t BTN2Pressed;
 SemaphoreHandle_t BTN3Pressed;
 SemaphoreHandle_t CAN1MsgRcvd;
 SemaphoreHandle_t CAN1MsgSaved;
 
+// I/O unit
 SemaphoreHandle_t CAN2MsgRcvd;
 SemaphoreHandle_t CAN2Request;
 SemaphoreHandle_t PWMRcvd;
@@ -184,25 +186,55 @@ QueueHandle_t ic5_sum;
 int main(void)
 {
 	prvSetupHardware(); /*  Configure hardware */
+    
+    // start in config mode - LED1 off
+    LATGCLR = LED1;
+    
+    // task arguments
+    poll_btn_args_t btn1_struct;
+	poll_btn_args_t btn2_struct;
+	poll_btn_args_t btn3_struct;
+    
+    set_temp_args_t lo_struct;
+    set_temp_args_t hi_struct;
+    
+    // initial queue values
+    // control unit
+	uint8_t mode_ctrl    = CONFIG;
+    float temp_curr_ctrl = 0;
+    float temp_lo_ctrl   = -1000;
+    float temp_hi_ctrl   = 1000;
+    uint8_t pwm_ctrl     = 0;
+    float rps_ctrl       = 0;
+    // I/O unit
+    float temp_io    = 0;
+    uint8_t pwm_io   = 0;
+    float rps_io     = 0;
+    unsigned int cap = 0;
+    unsigned int sum = 0;
 
+    // create semaphores
+    // control unit
 	BTN1Pressed  = xSemaphoreCreateBinary();
 	BTN2Pressed  = xSemaphoreCreateBinary();
 	BTN3Pressed  = xSemaphoreCreateBinary();
     CAN1MsgRcvd  = xSemaphoreCreateBinary();
     CAN1MsgSaved = xSemaphoreCreateBinary();
-    
+    // I/O unit
     CAN2MsgRcvd         = xSemaphoreCreateBinary();
     CAN2Request         = xSemaphoreCreateBinary();
     PWMRcvd             = xSemaphoreCreateBinary();
     MotorPeriodDetected = xSemaphoreCreateBinary();
     
+    // create queues
+    // control unit
     qMode_ctrl     = xQueueCreate(1, sizeof(uint8_t));
     qTempCurr_ctrl = xQueueCreate(1, sizeof(float));
     qTempLo_ctrl   = xQueueCreate(1, sizeof(float));
     qTempHi_ctrl   = xQueueCreate(1, sizeof(float));
     qPWM_ctrl      = xQueueCreate(1, sizeof(uint8_t));
     qRPS_ctrl      = xQueueCreate(1, sizeof(float));
-    
+    // I/O unit
     qTemp_io = xQueueCreate(1, sizeof(float));
     qPWM_io  = xQueueCreate(1, sizeof(uint8_t));
     qRPS_io  = xQueueCreate(1, sizeof(float));
@@ -210,38 +242,21 @@ int main(void)
     ic5_sum  = xQueueCreate(1, sizeof(unsigned int));
     
     // initialize queues
-	uint8_t mode_ctrl    = CONFIG;
-    float temp_curr_ctrl = 0;
-    float temp_lo_ctrl   = -1000;
-    float temp_hi_ctrl   = 1000;
-    uint8_t pwm_ctrl     = 0;
-    float rps_ctrl       = 0;
-    
-    float temp_io    = 0;
-    uint8_t pwm_io   = 0;
-    float rps_io     = 0;
-    unsigned int cap = 0;
-    unsigned int sum = 0;
-    
-    LATGCLR = LED1;
-    
+    // control unit
     xQueueSend(qMode_ctrl, &mode_ctrl, 0);
     xQueueSend(qTempCurr_ctrl, &temp_curr_ctrl, 0);
     xQueueSend(qTempLo_ctrl, &temp_lo_ctrl, 0);
     xQueueSend(qTempHi_ctrl, &temp_hi_ctrl, 0);
     xQueueSend(qPWM_ctrl, &pwm_ctrl, 0);
     xQueueSend(qRPS_ctrl, &rps_ctrl, 0);
-    
+    // I/O unit
     xQueueSend(qTemp_io, &temp_io, 0);
     xQueueSend(qPWM_io, &pwm_io, 0);
     xQueueSend(qRPS_io, &rps_io, 0);
     xQueueSend(ic5_cap, &cap, 0);
     xQueueSend(ic5_sum, &sum, 0);
-    
-    poll_btn_args_t btn1_struct;
-	poll_btn_args_t btn2_struct;
-	poll_btn_args_t btn3_struct;
 
+    // initialize task arguments
 	btn1_struct.btn     = BTN1;
 	btn1_struct.port    = IOPORT_G;
 	btn1_struct.unblock = BTN1Pressed;
@@ -254,39 +269,40 @@ int main(void)
 	btn3_struct.port    = IOPORT_A;
 	btn3_struct.unblock = BTN3Pressed;
     
-    set_temp_args_t lo_struct;
-    set_temp_args_t hi_struct;
-    
     lo_struct.queue   = qTempLo_ctrl;
     lo_struct.unblock = BTN3Pressed;
     
     hi_struct.queue   = qTempHi_ctrl;
     hi_struct.unblock = BTN2Pressed;
 
+    // check whether queues and semaphores exist
 	if ((qMode_ctrl != NULL) && (qTempCurr_ctrl != NULL) && (qTempLo_ctrl != NULL)
         && (qTempHi_ctrl != NULL) && (qPWM_ctrl != NULL) && (qRPS_ctrl != NULL)
+        && (qTemp_io != NULL) && (qPWM_io != NULL) && (qRPS_io != NULL)
+        && (ic5_cap != NULL) && (ic5_sum != NULL)
         && (BTN1Pressed != NULL) && (BTN2Pressed != NULL)
-        && (BTN3Pressed != NULL))
+        && (BTN3Pressed != NULL) && (CAN1MsgRcvd != NULL)
+        && (CAN1MsgSaved != NULL) && (CAN2MsgRcvd != NULL)
+        && (CAN2Request != NULL) && (PWMRcvd != NULL)
+        && (MotorPeriodDetected != NULL))
 	{
 		// create tasks and start scheduler
-		xTaskCreate(pollBTN, "BTN1 Poll", configMINIMAL_STACK_SIZE, &btn1_struct, 3, NULL);
-		xTaskCreate(pollBTN, "BTN2 Poll", configMINIMAL_STACK_SIZE, &btn2_struct, 3, NULL);
-		xTaskCreate(pollBTN, "BTN3 Poll", configMINIMAL_STACK_SIZE, &btn3_struct, 3, NULL);
-        
+        // control unit
+		xTaskCreate(pollBTN, "BTN1 Poll", configMINIMAL_STACK_SIZE, &btn1_struct, 4, NULL);
+		xTaskCreate(pollBTN, "BTN2 Poll", configMINIMAL_STACK_SIZE, &btn2_struct, 4, NULL);
+		xTaskCreate(pollBTN, "BTN3 Poll", configMINIMAL_STACK_SIZE, &btn3_struct, 4, NULL);
 		xTaskCreate(printToLCD, "Print to LCD", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 		xTaskCreate(switchMode, "Mode Switch", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-        
 		xTaskCreate(setTemp, "Low Temp Set", configMINIMAL_STACK_SIZE, &lo_struct, 2, NULL);
 		xTaskCreate(setTemp, "High Temp Set", configMINIMAL_STACK_SIZE, &hi_struct, 2, NULL);
-        
         xTaskCreate(requestData, "Request Data", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
         xTaskCreate(sendPWM, "PWM Send", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(CAN1RXHandler, "CAN1 RX Handler", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-        
+        // I/O unit
         xTaskCreate(readSensors, "Sensor Read", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(calcRPS, "RPS Calc", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
         xTaskCreate(setPWM, "PWM Output", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-        xTaskCreate(sendData, "Send Data", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+        xTaskCreate(sendData, "Send Data", configMINIMAL_STACK_SIZE, NULL, 3, NULL);
         xTaskCreate(CAN2RXHandler, "CAN2 RX Handler", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
 		vTaskStartScheduler();
@@ -305,11 +321,12 @@ int main(void)
 
 static void pollBTN(void *pvParameters)
 {
-	poll_btn_args_t* params = (poll_btn_args_t*)pvParameters;
+	poll_btn_args_t* args = (poll_btn_args_t*)pvParameters;
     
-    const unsigned int btn = params->btn;
-    const unsigned int port = params->port;
-    SemaphoreHandle_t unblock = params->unblock;
+    // extract arguments from pointer
+    const unsigned int btn = args->btn;
+    const unsigned int port = args->port;
+    SemaphoreHandle_t unblock = args->unblock;
 
 	unsigned int btn_curr = 0;
 	unsigned int btn_prev = 0;
@@ -323,7 +340,7 @@ static void pollBTN(void *pvParameters)
 
 		if (btn_curr && !btn_prev) // if button has been pressed
 		{
-			vTaskDelay(20 / portTICK_RATE_MS);
+			vTaskDelay(20 / portTICK_RATE_MS);  // debounce
 
 			if (PORTReadBits(port, btn))
 			{
@@ -356,12 +373,14 @@ static void printToLCD(void* pvParameters)
 	{
         xQueuePeek(qMode_ctrl, &mode, 0);
         
+        // printed in both modes
         xQueuePeek(qTempCurr_ctrl, &temp_curr, 0);
         xQueuePeek(qTempLo_ctrl, &temp_lo, 0);
         xQueuePeek(qTempHi_ctrl, &temp_hi, 0);
-                
+               
 		sprintf(temp_curr_str, "%2.1f", temp_curr);
         
+        // temp_lo is "undefined" if <= -1000
         if (temp_lo > -1000)
         {
             sprintf(temp_lo_str, "%2.1f", temp_lo);
@@ -371,6 +390,7 @@ static void printToLCD(void* pvParameters)
             sprintf(temp_lo_str, "");
         }
         
+        // temp_hi is "undefined" if >= 1000
         if (temp_hi < 1000)
         {
             sprintf(temp_hi_str, "%2.1f", temp_hi);
@@ -382,6 +402,7 @@ static void printToLCD(void* pvParameters)
 
 		if (mode == OPERATE)
 		{
+            // get data not printed in config mode
             xQueuePeek(qPWM_ctrl, &pwm, 0);
             xQueuePeek(qRPS_ctrl, &rps, 0);
             
@@ -399,7 +420,9 @@ static void printToLCD(void* pvParameters)
 			LCD_puts(temp_lo_str);
             vTaskDelay(1);
 
-			if ((temp_hi > 100) || (temp_hi < 0))
+            // temp_hi is right-aligned
+            // move it one digit left if >= 100
+			if ((temp_hi >= 100) || (temp_hi < 0))
             {
                 LCD_set_cursor_pos(1, 11);
             }
@@ -431,7 +454,9 @@ static void printToLCD(void* pvParameters)
 			LCD_puts(temp_lo_str);
             vTaskDelay(1);
 
-            if ((temp_hi > 100) || (temp_hi < 0))
+            // temp_hi is right-aligned
+            // move it one digit left if >= 100
+            if ((temp_hi >= 100) || (temp_hi < 0))
             {
                 LCD_set_cursor_pos(1, 11);
             }
@@ -443,6 +468,7 @@ static void printToLCD(void* pvParameters)
 			LCD_puts(temp_hi_str);
 		}
         
+        // LCD is illegible if it updates too often
         vTaskDelay(100 / portTICK_RATE_MS);
 	}
 }  /* end of printToLCD ----------------------------------------------------- */
@@ -459,8 +485,10 @@ static void switchMode(void *pvParameters)
 
 	while (1)
 	{
+        // given by pollBTN for BTN1
 		xSemaphoreTake(BTN1Pressed, portMAX_DELAY);
         
+        // load global data
         xQueuePeek(qMode_ctrl, &mode, 0);
         xQueuePeek(qTempLo_ctrl, &temp_lo, 0);
         xQueuePeek(qTempHi_ctrl, &temp_hi, 0);
@@ -498,14 +526,17 @@ static void setTemp(void *pvParameters)
 
 	while (1)
 	{
+        // given by pollBTN for either BTN2 or BTN3
 		xSemaphoreTake(unblock, portMAX_DELAY);
 
+        // get current temperature and overwrite either temp_lo or temp_hi
         xQueuePeek(qTempCurr_ctrl, &temp_new, 0);
         xQueueOverwrite(queue, &temp_new);
         
         xQueuePeek(qTempLo_ctrl, &temp_lo, 0);
         xQueuePeek(qTempHi_ctrl, &temp_hi, 0);
         
+        // "clear" temp points if lo >= hi
         if (temp_lo >= temp_hi)
         {
             temp_new = -1000;
@@ -527,7 +558,7 @@ static void requestData(void* pvParameters)
         
         if (message != NULL)
         {
-            // construct message
+            // construct RTR frame
             message->messageWord[0] = 0;
             message->messageWord[1] = 0;
             message->messageWord[2] = 0;
@@ -565,12 +596,15 @@ static void sendPWM(void *pvParameters)
     
 	while (1)
 	{
+        // given by CAN1RXHandler
         xSemaphoreTake(CAN1MsgSaved, portMAX_DELAY);
         
+        // load global data
         xQueuePeek(qTempCurr_ctrl, &temp_curr, 0);
         xQueuePeek(qTempLo_ctrl, &temp_lo, 0);
         xQueuePeek(qTempHi_ctrl, &temp_hi, 0);
         
+        // if temp points "not set", don't change PWM
         if ((temp_lo > -1000) && (temp_hi < 1000))
         {
             pwm = calcPWM(temp_curr, temp_lo, temp_hi);
@@ -602,8 +636,6 @@ static void sendPWM(void *pvParameters)
             CANFlushTxChannel(CAN1, CAN_CHANNEL0);
         }
         
-//        vTaskDelay(1000 / portTICK_RATE_MS);
-
 		LATBINV = LEDC;
 	}
 }  /* end of sendPWM -------------------------------------------------------- */
@@ -624,13 +656,14 @@ static void CAN1RXHandler(void* pvParameters)
     
     while (1)
     {
+        // given by CAN1InterruptHandler
         xSemaphoreTake(CAN1MsgRcvd, portMAX_DELAY);
         
         LATBINV = LEDB;
         
         message = (CANRxMessageBuffer*)CANGetRxMessage(CAN1, CAN_CHANNEL1);
         
-        // extract data here
+        // extract data from frame
         for (i = 0; i < SENSOR_DATA_LEN; i++)
         {
             sensorData.data[i] = message->data[i];
@@ -642,10 +675,12 @@ static void CAN1RXHandler(void* pvParameters)
         
         tempF = tempBinaryToFahrenheit(tempBin);
         
+        // save data to global variables
         xQueueOverwrite(qTempCurr_ctrl, &tempF);
         xQueueOverwrite(qPWM_ctrl, &pwm);
         xQueueOverwrite(qRPS_ctrl, &rps);
         
+        // signal sendPWM
         xSemaphoreGive(CAN1MsgSaved);
         
         CANUpdateChannel(CAN1, CAN_CHANNEL1);
@@ -688,6 +723,7 @@ uint8_t calcPWM(float temp_curr, float temp_lo, float temp_hi)
     }
     else
     {
+        // linear function of temperature over 35% <= PWM <= 85%
         temp_range = temp_hi - temp_lo;
         temp_diff = temp_curr - temp_lo;
         ratio = temp_diff / temp_range;
@@ -722,14 +758,14 @@ static void readSensors(void* pvParameters)
     
 	while (1)
 	{
-		// read
+        // read temp from IR sensor
         temp = readTemp();
         xQueueOverwrite(qTemp_io, &temp);
         
         xQueuePeek(ic5_sum, &sum, 0);
         
         // rps = # of measurements * T3 ticks per ms * ms per s / sum of ticks
-        rps = (16 * 39.0625f * 1000) / sum;
+        rps = (16 * 39.0625f * 1000) / sum;  // average rps
         xQueueOverwrite(qRPS_io, &rps);
         
         vTaskDelay(500 / portTICK_RATE_MS);
@@ -754,6 +790,7 @@ static void calcRPS(void* pvParameters)
 
     while (1)
     {
+        // given by IC5IntHandler
         xSemaphoreTake(MotorPeriodDetected, portMAX_DELAY);
         
         xQueueReceive(ic5_cap, &cap, 0);
@@ -788,10 +825,11 @@ static void setPWM(void* pvParameters)
     
     while (1)
     {
+        // given by CAN2RXHandler
         xSemaphoreTake(PWMRcvd, portMAX_DELAY);
         
         xQueuePeek(qPWM_io, &pwm, 0);
-        pwm_f = pwm / 100.0f;
+        pwm_f = pwm / 100.0f;  // convert pwm from int to float
         duty_cycle_ticks = (unsigned int)duty_cycle_to_ticks(pwm_f);
         SetDCOC3PWM(duty_cycle_ticks);
         
@@ -814,6 +852,7 @@ static void sendData(void* pvParameters)
     
 	while (1)
 	{
+        // given by CAN2RXHandler
         xSemaphoreTake(CAN2Request, portMAX_DELAY);
         
         message = CANGetTxMessageBuffer(CAN2, CAN_CHANNEL0);
@@ -857,8 +896,6 @@ static void sendData(void* pvParameters)
             CANUpdateChannel(CAN2, CAN_CHANNEL0);
             CANFlushTxChannel(CAN2, CAN_CHANNEL0);
         }
-        
-//        vTaskDelay(1000 / portTICK_RATE_MS);
 	}
 }  /* end of sendData ------------------------------------------------------- */
 
@@ -873,21 +910,24 @@ static void CAN2RXHandler(void* pvParameters)
     
     while (1)
     {
+        // given by CAN2InterruptHandler
         xSemaphoreTake(CAN2MsgRcvd, portMAX_DELAY);
         
         message = (CANRxMessageBuffer*)CANGetRxMessage(CAN2, CAN_CHANNEL1);
         
-        // handle message types here
         rtr = message->msgEID.RTR;
         
-        if (rtr)
+        if (rtr)  // if request for data
         {
+            // signal sendData
             xSemaphoreGive(CAN2Request);
         }
-        else
+        else  // if PWM data frame
         {
             pwm = message->data[0];
             xQueueOverwrite(qPWM_io, &pwm);
+            
+            // signal setPWM
             xSemaphoreGive(PWMRcvd);
         }
         
@@ -912,15 +952,11 @@ uint16_t readTemp(void)
     
     I2C1_IR_Read(slave_addr, command, ir_data, data_len);
     
+    // get rid of CRC
     temp = (ir_data[1] << 8) | ir_data[0];
     
     return temp;
 }  /* end of readTemp ------------------------------------------------------- */
-
-float readRPS(void)
-{
-    
-}  /* end of readRPS -------------------------------------------------------- */
 
 
 
@@ -966,6 +1002,7 @@ void CAN1InterruptHandler(void)
             CANEnableChannelEvent(CAN1, CAN_CHANNEL1, CAN_RX_CHANNEL_NOT_EMPTY,
                                     FALSE);
 
+            // signal CAN1RXHandler
             xSemaphoreGiveFromISR(CAN1MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
         }
     }
@@ -976,7 +1013,7 @@ void CAN1InterruptHandler(void)
  * CAN1 interrupt flag when the the CAN_RX_CHANNEL_NOT_EMPTY interrupt is
  * enabled will not have any effect because the base event is still present. */	
     INTClearFlag(INT_CAN1);
-}
+}  /* end of CAN1InterruptHandler ------------------------------------------- */
 
 /****************************************************************************
  * Function:    void __ISR(_CAN_2_VECTOR, ipl4) CAN2InterruptHandler(void);
@@ -1019,6 +1056,7 @@ void CAN2InterruptHandler(void)
             CANEnableChannelEvent(CAN2, CAN_CHANNEL1, CAN_RX_CHANNEL_NOT_EMPTY, 
                                     FALSE);
 
+            // signal CAN2RXHandler
             xSemaphoreGiveFromISR(CAN2MsgRcvd, &xHigherPriorityTaskWoken);  // PJP
         }
     }
@@ -1030,7 +1068,7 @@ void CAN2InterruptHandler(void)
  * will not have any effect because the base event is still present. */
 	
     INTClearFlag(INT_CAN2);
-} /* enD OF CAN2InterruptHandler(void) */
+}  /* end of CAN2InterruptHandler ------------------------------------------- */
 
 void IC5IntHandler(void)
 {
@@ -1039,13 +1077,14 @@ void IC5IntHandler(void)
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     
     ReadCapture5(cap_buf);  // Read captures into buffer
-    cap = cap_buf[0];
-    
+    cap = cap_buf[0];  // only need first value
     xQueueSendFromISR(ic5_cap, &cap, &xHigherPriorityTaskWoken);
+    
+    // signal calcRPS
     xSemaphoreGiveFromISR(MotorPeriodDetected, &xHigherPriorityTaskWoken);
     
     mIC5ClearIntFlag();
-}
+}  /* end of IC5IntHandler -------------------------------------------------- */
 
 
 
@@ -1087,7 +1126,7 @@ static void prvSetupHardware(void)
 	INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR); /* Do only once */
 	INTEnableInterrupts();							   /*Do as needed for global interrupt control */
 	portDISABLE_INTERRUPTS();
-}
+}  /* end of prvSetupHardware ----------------------------------------------- */
 
 /*!
  * @brief
@@ -1103,7 +1142,7 @@ void PMP_init(void)
 	int cfg3 = PMP_PEN_0;	// only PMA0 enabled
 	int cfg4 = PMP_INT_OFF; // no interrupts used
 	mPMPOpen(cfg1, cfg2, cfg3, cfg4);
-}
+} /* end of PMP_init -------------------------------------------------------- */
 
 /* CAN1Init Function Description ********************************************
 SYNTAX:         void CAN1Init(void);
@@ -1299,7 +1338,7 @@ CAN_BIT_CONFIG canBitConfig;
     CANSetOperatingMode(CAN1, CAN_NORMAL_OPERATION);
     while(CANGetOperatingMode(CAN1) != CAN_NORMAL_OPERATION);
 
-} /* End of CAN1Init */
+}  /* end of CAN1Init ------------------------------------------------------- */
 
 /* CAN2Init Function Description ********************************************
 SYNTAX:         void CAN2Init(void);
@@ -1370,7 +1409,7 @@ void CAN2Init(void)
  /* Step 7: Switch the CAN mode to normal mode. */
     CANSetOperatingMode(CAN2, CAN_NORMAL_OPERATION);
     while(CANGetOperatingMode(CAN2) != CAN_NORMAL_OPERATION);
-} /* End of CAN2Init */
+}  /* end of CAN2Init ------------------------------------------------------- */
 
 void OC3_init(void)
 {
