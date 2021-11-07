@@ -1,7 +1,7 @@
 +hostname
 +machineDesc
-+price(0)
-+price(1)
+price(0)
+price(1)
 +version
 +builddate
 +name(0)
@@ -25,3 +25,5 @@
 +name(6)
 +stock(6)
 +status(6)
++temp(0)
++temp(1)

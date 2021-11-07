@@ -54,12 +54,12 @@ extern BYTE curHTTPID;
 void HTTPPrint(DWORD callbackID);
 void HTTPPrint_hostname(void);
 void HTTPPrint_machineDesc(void);
-void HTTPPrint_price(WORD);
 void HTTPPrint_version(void);
 void HTTPPrint_builddate(void);
 void HTTPPrint_name(WORD);
 void HTTPPrint_stock(WORD);
 void HTTPPrint_status(WORD);
+void HTTPPrint_temp(WORD);
 
 void HTTPPrint(DWORD callbackID)
 {
@@ -70,12 +70,6 @@ void HTTPPrint(DWORD callbackID)
 			break;
         case 0x00000001:
 			HTTPPrint_machineDesc();
-			break;
-        case 0x00000002:
-			HTTPPrint_price(0);
-			break;
-        case 0x00000003:
-			HTTPPrint_price(1);
 			break;
         case 0x00000004:
 			HTTPPrint_version();
@@ -145,6 +139,12 @@ void HTTPPrint(DWORD callbackID)
 			break;
         case 0x0000001a:
 			HTTPPrint_status(6);
+			break;
+        case 0x0000001b:
+			HTTPPrint_temp(0);
+			break;
+        case 0x0000001c:
+			HTTPPrint_temp(1);
 			break;
 		default:
 			// Output notification for undefined values

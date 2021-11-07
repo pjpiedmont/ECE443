@@ -57,7 +57,7 @@ static void ProcessIO(void);
 static void Delayms(unsigned int);
 
 // Global variables used for dynamic WEB variables and WEB controls
-VEND_ITEM Products[MAX_PRODUCTS];		// All items in the machine
+TEMP_ITEM temp_points[2];		// All items in the machine
 
 BYTE machineDesc[33];					// Machine descript string
 
@@ -79,7 +79,7 @@ static enum
 } smVend = SM_DEBOUNCE_UP;			// Application state machine initial state
 
 // Vending Machine Function Prototypes
-static void WritePriceLCD(BYTE price, BYTE position);
+static void WritePriceLCD(float temp, BYTE position);
 
 /*	============= Main application entry point.	============= */
 int main(void)
@@ -95,7 +95,7 @@ static DWORD dwLastIP = 0;
     LCDInit();
     DelayMs(100);
 // This writes both LCD lines
-    strcpypgm2ram((char*)LCDText, "WebVend Demo App"
+    strcpypgm2ram((char*)LCDText, "ECE443 Project 6"
 								  "                "); 
     LCDUpdate();
 #endif
@@ -175,7 +175,7 @@ static DWORD dwLastIP = 0;
 // If not vending, show the new IP on terminal and LCD
             if(smVend == SM_IDLE || smVend == SM_DISPLAY_WAIT)
             {
-                memcpypgm2ram(LCDText, "WebVend Demo App", 16);
+                memcpypgm2ram(LCDText, "ECE443 Project 6", 16);
                 DisplayIPValue(AppConfig.MyIPAddr);
 
                 #if defined(STACK_USE_UART)
@@ -294,17 +294,17 @@ static BOOL lcdUpdated;
 		
 		case SM_TRY_VEND:
 			// Try to vend a product
-			if(Products[curItem].stock == 0u)
+			if(temp_points[curItem].stock == 0u)
 			{// Product is sold out
 				strcpypgm2ram((char*)LCDText, (ROM char*)"    SOLD OUT                    ");
 				LCDUpdate();
 				displayTimeout = TickGet() + TICK_SECOND;
 				smVend = SM_DISPLAY_WAIT;
 			}
-			else if(Products[curItem].price > curCredit)
+			else if(temp_points[curItem].temp > curCredit)
 			{
 				strcpypgm2ram((char*)LCDText, (ROM char*)"Price:  $       Credit: $       ");
-				WritePriceLCD(Products[curItem].price, 9);
+				WritePriceLCD(temp_points[curItem].temp, 9);
 				WritePriceLCD(curCredit, 25);
 				LCDUpdate();
 				displayTimeout = TickGet() + 2*TICK_SECOND;
@@ -313,8 +313,8 @@ static BOOL lcdUpdated;
 			else
 			{
 				strcpypgm2ram((char*)LCDText, (ROM char*)"   vending...                   ");
-				curCredit -= Products[curItem].price;
-				Products[curItem].stock--;
+				curCredit -= temp_points[curItem].temp;
+				temp_points[curItem].stock--;
 				LCDUpdate();
 				displayTimeout = TickGet() + TICK_SECOND;
 				smVend = SM_DISPLAY_WAIT;
@@ -386,35 +386,36 @@ void WriteLCDMenu(void)
 	strcpypgm2ram((char*)LCDText, (ROM char*)"                                ");
 	
 	// Show the name
-	strcpy((char*)LCDText, (char*)Products[curItem].name);
-	LCDText[strlen((char*)Products[curItem].name)] = ' ';
+	strcpy((char*)LCDText, (char*)temp_points[curItem].name);
+	LCDText[strlen((char*)temp_points[curItem].name)] = ' ';
+    WritePriceLCD(temp_points[curItem].temp, 8);
 	
-	// Show the price, or sold out status
-	if(Products[curItem].stock == 0u)
-	{
-		memcpypgm2ram(&LCDText[12], (ROM void*)"SOLD", 4);
-	}
-	else
-	{
-		LCDText[11] = '$';
-		WritePriceLCD(Products[curItem].price, 12);
-	}
+//	// Show the price, or sold out status
+//	if(temp_points[curItem].stock == 0u)
+//	{
+//		memcpypgm2ram(&LCDText[12], (ROM void*)"SOLD", 4);
+//	}
+//	else
+//	{
+////		LCDText[11] = '$';
+//		WritePriceLCD(temp_points[curItem].temp, 12);
+//	}
 	
-	// Show the current credit
-	LCDText[16] = '$';
-	WritePriceLCD(curCredit, 17);
-	
-	// Show the vend button if available
-	if(Products[curItem].stock != 0u && Products[curItem].price <= curCredit)
-		memcpypgm2ram(&LCDText[22], (ROM void*)"Vend", 4);
-	else
-		memcpypgm2ram(&LCDText[23], (ROM void*)"--", 2);
-	
-	// Show the rest of the buttons
-	if(curItem != 0u)
-		memcpypgm2ram(&LCDText[27], (ROM void*)"<<", 2);
-	if(curItem != MAX_PRODUCTS-1)
-		memcpypgm2ram(&LCDText[30], (ROM void*)">>", 2);
+//	// Show the current credit
+//	LCDText[16] = '$';
+//	WritePriceLCD(curCredit, 17);
+//	
+//	// Show the vend button if available
+//	if(temp_points[curItem].stock != 0u && temp_points[curItem].temp <= curCredit)
+//		memcpypgm2ram(&LCDText[22], (ROM void*)"Vend", 4);
+//	else
+//		memcpypgm2ram(&LCDText[23], (ROM void*)"--", 2);
+//	
+//	// Show the rest of the buttons
+//	if(curItem != 0u)
+//		memcpypgm2ram(&LCDText[27], (ROM void*)"<<", 2);
+//	if(curItem != MAX_PRODUCTS-1)
+//		memcpypgm2ram(&LCDText[30], (ROM void*)">>", 2);
 
 	// Update to the screen	
 	LCDUpdate();
@@ -433,9 +434,9 @@ void WriteLCDMenu(void)
  *					the amount of code provide by the WebVend demo.
  *                  
  ********************************************************************/
-static void WritePriceLCD(BYTE price, BYTE position)
+static void WritePriceLCD(float temp, BYTE position)
 {
-	sprintf((char *) &LCDText[position],"%d.%02d", (price>>2), (price & 0x03)*25);
+	sprintf((char *) &LCDText[position], "%3.2f F", temp);
 }
 
 /*********************************************************************
@@ -598,23 +599,13 @@ static void InitAppConfig(void)
 	
 	
 // Vending machine specific defaults
-	strcpypgm2ram((char*)Products[0].name, (ROM char*)"Cola");
-	strcpypgm2ram((char*)Products[1].name, (ROM char*)"Diet Cola");
-	strcpypgm2ram((char*)Products[2].name, (ROM char*)"Root Beer");
-	strcpypgm2ram((char*)Products[3].name, (ROM char*)"Orange");
-	strcpypgm2ram((char*)Products[4].name, (ROM char*)"Lemonade");
-	strcpypgm2ram((char*)Products[5].name, (ROM char*)"Iced Tea");
-	strcpypgm2ram((char*)Products[6].name, (ROM char*)"Water");
+	strcpypgm2ram((char*)temp_points[0].name, (ROM char*)"Low");
+	strcpypgm2ram((char*)temp_points[1].name, (ROM char*)"High");
 
 // Price is measured in quarters ($0.25)
-	Products[0].price = 4;	// $1.00
-	Products[1].price = 4;
-	Products[2].price = 4;
-	Products[3].price = 4;
-	Products[4].price = 5;	// $1.25
-	Products[5].price = 7;
-	Products[6].price = 8;	// $2.00
-	strcpypgm2ram((char*)machineDesc, (ROM char*)"UI ECE443 Lessons 1-3");
+	temp_points[0].temp = 100;
+	temp_points[1].temp = 110;
+	strcpypgm2ram((char*)machineDesc, (ROM char*)"ECE 443 Project 6");
 	machineDesc[22] = '\0';
 	curItem = 0;
 	curCredit = 0;
@@ -626,14 +617,6 @@ static void InitAppConfig(void)
 // Compute the checksum of the AppConfig defaults as loaded from ROM
 	wOriginalAppConfigChecksum = CalcIPChecksum((BYTE*)&AppConfig, sizeof(AppConfig));
 
-	// Update with default stock values on every reboot
-	Products[0].stock = 15;
-	Products[1].stock = 9;
-	Products[2].stock = 22;
-	Products[3].stock = 18;
-	Products[4].stock = 4;
-	Products[5].stock = 29;
-	Products[6].stock = 14;
 }  // End of InitAppConfig
 
 
