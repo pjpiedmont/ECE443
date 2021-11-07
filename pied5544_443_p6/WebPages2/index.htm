@@ -1,0 +1,40 @@
+<p align="center" style="margin-top: 0">
+	<b>Temperature Set Points</b>
+</p>
+
+<div id="location">Machine ~hostname~ :: ~machineDesc~</div>
+
+<form method="post" action="index.htm">
+
+	<fieldset>
+		<legend><b>Manage Set Points</b></legend>
+
+		<table align="center" cellpadding="2">
+			<tr>
+			<td><b>Set Point</b></td><td><b>Temperature</b></td>
+			</tr>
+
+			<tr>
+			<td>Low temperature</td>
+			<td><input type="text" name="price[0]" value="~price(0)~" 
+				maxlength="5" size="8" /></td>
+			</tr>
+
+			<tr>
+			<td>High temperature</td>
+			<td><input type="text" name="price[1]" value="~price(1)~" 
+				maxlength="5" size="8" /></td>
+			</tr>
+
+			<tr>
+			<td colspan="2" align="center"><input type="submit" 
+				value="Save" /></td>
+			</tr>
+
+		</table>
+
+	</fieldset>
+</form>
+
+<span id="version">~version~</span>
+<span id="builddate">~builddate~</span>

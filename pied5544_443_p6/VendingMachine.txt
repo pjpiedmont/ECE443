@@ -1,0 +1,46 @@
+
+Vending Maching Application Lesson 2
+
+This application is a modified version of WebVend demonstration 
+program supplied with the Microchip Applications library.  The
+differences are found in the fact that all references to 
+processors other than the PIC32MX7 and compilesr other than C32
+have been removed.  This application has been specifically
+targeted to the Digilent Cerebot 32MX7ck development board that
+is equipped to the PModCLP LCD connected to the board JB and JC
+PMod connectors
+
+The original WebVend application was presented in a series
+of three Microchip Webinars that progressively developed the
+web interfaces used in this version of the application.
+
+The operations of this application has been modified to 
+accomodate 3 button control where as the oribinal code used
+four buttons. The operations are now as follows:
+
+1. BTN1 - Shift selection right
+2. BTN2 - Shift selection left
+3. BTN3 - make selection
+4  BTN2 & BTN3 - add $0.25 to coin box.
+
+CFG_INCLUDE_PIC32_ETH_SK_ETH795 must be defined in the project 
+built options for the MPLAB PIC32 Assembler and the PIC32 C
+Compiler.
+
+The Directory must show the following paths for the include
+search path:
+.
+configs
+..\..\Microchip\Include
+
+The device IP address is set in the File TCPIP ETH795.h
+
+
+Full functionality tested on 12/10/2012
+
+Richard W. Wall
+Department of Electrical and COmputer ENgineering
+University of Idaho
+Moscow, ID 83844-1023
+rwall@uidaho.edu
+
