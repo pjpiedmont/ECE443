@@ -57,7 +57,7 @@ static void ProcessIO(void);
 static void Delayms(unsigned int);
 
 // Global variables used for dynamic WEB variables and WEB controls
-TEMP_ITEM temp_points[2];		// All items in the machine
+TEMP_ITEM temp_points[MAX_TEMP_POINTS];		// All items in the machine
 
 BYTE machineDesc[33];					// Machine descript string
 
@@ -69,17 +69,14 @@ static enum
 {
     SM_IDLE = 0u,
     SM_DEBOUNCE_DOWN,
-    SM_ADD_COIN,
-    SM_TRY_VEND,
-    SM_PREV,
-    SM_NEXT,
+    SM_CLEAR,
     SM_DISPLAY_WAIT,
     SM_RELEASE_WAIT,
     SM_DEBOUNCE_UP
 } smVend = SM_DEBOUNCE_UP;			// Application state machine initial state
 
 // Vending Machine Function Prototypes
-static void WritePriceLCD(float temp, BYTE position);
+static void WriteTempLCD(float temp, BYTE position);
 
 /*	============= Main application entry point.	============= */
 int main(void)
@@ -257,84 +254,22 @@ static BOOL lcdUpdated;
 		case SM_IDLE:
 			lcdUpdated = FALSE;		
 			// Wait for a button press
-			if(BUTTON0_IO == 1u || BUTTON1_IO == 1u || BUTTON2_IO == 1u) // || BUTTON3_IO == 1u)
+			if(BUTTON0_IO == 1u)
 				smVend = SM_DEBOUNCE_DOWN;
 			break;
 
 		case SM_DEBOUNCE_DOWN:
 			Delayms(100);	// Allows dual button press
 			// Check if a button is down
-			if(BUTTON2_IO == 1u && BUTTON1_IO == 1u)
-				smVend = SM_ADD_COIN;
-			else if(BUTTON2_IO == 1u)
-				smVend = SM_TRY_VEND;
-			else if(BUTTON1_IO == 1u)
-				smVend = SM_PREV;
-			else if(BUTTON0_IO == 1u)
-				smVend = SM_NEXT;
+			if(BUTTON0_IO == 1u)
+				smVend = SM_CLEAR;
 			else
 				smVend = SM_IDLE;
 			break;
-			
-		case SM_ADD_COIN:
-			// Add a quarter, up to $5.00
-			if(curCredit < 20u)
-			{// Increase the credit
-				curCredit++;
-				smVend = SM_RELEASE_WAIT;
-			}
-			else
-			{// Max credit was reached
-				strcpypgm2ram((char*)LCDText, (ROM char*)" Coin Returned! Max credit is $5");
-				LCDUpdate();
-				displayTimeout = TickGet() + 2*TICK_SECOND;
-				smVend = SM_DISPLAY_WAIT;
-			}
-			break;
 		
-		case SM_TRY_VEND:
-			// Try to vend a product
-			if(temp_points[curItem].stock == 0u)
-			{// Product is sold out
-				strcpypgm2ram((char*)LCDText, (ROM char*)"    SOLD OUT                    ");
-				LCDUpdate();
-				displayTimeout = TickGet() + TICK_SECOND;
-				smVend = SM_DISPLAY_WAIT;
-			}
-			else if(temp_points[curItem].temp > curCredit)
-			{
-				strcpypgm2ram((char*)LCDText, (ROM char*)"Price:  $       Credit: $       ");
-				WritePriceLCD(temp_points[curItem].temp, 9);
-				WritePriceLCD(curCredit, 25);
-				LCDUpdate();
-				displayTimeout = TickGet() + 2*TICK_SECOND;
-				smVend = SM_DISPLAY_WAIT;
-			}
-			else
-			{
-				strcpypgm2ram((char*)LCDText, (ROM char*)"   vending...                   ");
-				curCredit -= temp_points[curItem].temp;
-				temp_points[curItem].stock--;
-				LCDUpdate();
-				displayTimeout = TickGet() + TICK_SECOND;
-				smVend = SM_DISPLAY_WAIT;
-				// For endurance reasons, we don't update stock in EEPROM here.
-				// That means only stock/product changes made through the web interface
-				// will survive a reset.
-			}
-			break;
-		
-		case SM_PREV:
-			// Move back one product in the list
-			if(curItem > 0u)
-				curItem--;
-			smVend = SM_RELEASE_WAIT;
-			break;
-		
-		case SM_NEXT:
-			// Move forward one product in the list
-			if(curItem < MAX_PRODUCTS-1)
-				curItem++;
+		case SM_CLEAR:
+            temp_points[0].temp = 0;
+            temp_points[1].temp = 0;
 			smVend = SM_RELEASE_WAIT;
 			break;
 		
@@ -354,13 +289,13 @@ static BOOL lcdUpdated;
 			}
 			
 			// Continue if all buttons are up
-			if(BUTTON0_IO == 0u && BUTTON1_IO == 0u && BUTTON2_IO == 0u)//  && BUTTON3_IO == 0u)
+			if(BUTTON0_IO == 0u)// && BUTTON1_IO == 0u && BUTTON2_IO == 0u)//  && BUTTON3_IO == 0u)
 				smVend = SM_DEBOUNCE_UP;
 			break;
 		
 		case SM_DEBOUNCE_UP:
 			// Make sure all buttons were released
-			if(BUTTON0_IO == 0u && BUTTON1_IO == 0u && BUTTON2_IO == 0u)//  && BUTTON3_IO == 0u)
+			if(BUTTON0_IO == 0u)// && BUTTON1_IO == 0u && BUTTON2_IO == 0u)//  && BUTTON3_IO == 0u)
 				smVend = SM_IDLE;
 			else
 				smVend = SM_RELEASE_WAIT;
@@ -385,37 +320,13 @@ void WriteLCDMenu(void)
 	// Blank the LCD display
 	strcpypgm2ram((char*)LCDText, (ROM char*)"                                ");
 	
-	// Show the name
-	strcpy((char*)LCDText, (char*)temp_points[curItem].name);
-	LCDText[strlen((char*)temp_points[curItem].name)] = ' ';
-    WritePriceLCD(temp_points[curItem].temp, 8);
-	
-//	// Show the price, or sold out status
-//	if(temp_points[curItem].stock == 0u)
-//	{
-//		memcpypgm2ram(&LCDText[12], (ROM void*)"SOLD", 4);
-//	}
-//	else
-//	{
-////		LCDText[11] = '$';
-//		WritePriceLCD(temp_points[curItem].temp, 12);
-//	}
-	
-//	// Show the current credit
-//	LCDText[16] = '$';
-//	WritePriceLCD(curCredit, 17);
-//	
-//	// Show the vend button if available
-//	if(temp_points[curItem].stock != 0u && temp_points[curItem].temp <= curCredit)
-//		memcpypgm2ram(&LCDText[22], (ROM void*)"Vend", 4);
-//	else
-//		memcpypgm2ram(&LCDText[23], (ROM void*)"--", 2);
-//	
-//	// Show the rest of the buttons
-//	if(curItem != 0u)
-//		memcpypgm2ram(&LCDText[27], (ROM void*)"<<", 2);
-//	if(curItem != MAX_PRODUCTS-1)
-//		memcpypgm2ram(&LCDText[30], (ROM void*)">>", 2);
+	strcpy((char*)LCDText, (char*)temp_points[0].name);
+	LCDText[strlen((char*)temp_points[0].name)] = ' ';
+    WriteTempLCD(temp_points[0].temp, 7);
+    
+    strcpy((char*)LCDText + 16, (char*)temp_points[1].name);
+	LCDText[strlen((char*)temp_points[1].name) + 16] = ' ';
+    WriteTempLCD(temp_points[1].temp, 23);
 
 	// Update to the screen	
 	LCDUpdate();
@@ -434,7 +345,7 @@ void WriteLCDMenu(void)
  *					the amount of code provide by the WebVend demo.
  *                  
  ********************************************************************/
-static void WritePriceLCD(float temp, BYTE position)
+static void WriteTempLCD(float temp, BYTE position)
 {
 	sprintf((char *) &LCDText[position], "%3.2f F", temp);
 }
@@ -504,8 +415,8 @@ static void InitializeBoard(void)
 	LED_PUT(0xFF);
 
 	BUTTON0_TRIS = 1;	
-	BUTTON1_TRIS = 1;	
-	BUTTON2_TRIS = 1;	
+//	BUTTON1_TRIS = 1;	
+//	BUTTON2_TRIS = 1;	
 
 		// Enable multi-vectored interrupts
 	INTEnableSystemMultiVectoredInt();
@@ -602,9 +513,8 @@ static void InitAppConfig(void)
 	strcpypgm2ram((char*)temp_points[0].name, (ROM char*)"Low");
 	strcpypgm2ram((char*)temp_points[1].name, (ROM char*)"High");
 
-// Price is measured in quarters ($0.25)
-	temp_points[0].temp = 100;
-	temp_points[1].temp = 110;
+	temp_points[0].temp = 0;
+	temp_points[1].temp = 0;
 	strcpypgm2ram((char*)machineDesc, (ROM char*)"ECE 443 Project 6");
 	machineDesc[22] = '\0';
 	curItem = 0;

@@ -69,7 +69,7 @@ extern BYTE curHTTPID;
 // Vending Machine Application Global Variables
 #include "VendingMachine.h"
 // #include "MainDemo.h"
-extern TEMP_ITEM temp_points[MAX_PRODUCTS];	// All Products in the machine
+extern TEMP_ITEM temp_points[2];	// All Products in the machine
 extern BYTE machineDesc[33];				// Machine description string
 
 #ifndef SaveAppConfig
@@ -162,13 +162,15 @@ HTTP_IO_RESULT HTTPExecutePost(void)
 {
     BYTE name[20], item, *ptr;
     WORD len;
+    char temp_str[10];
+    float temp;
 	
 // Load the file name
 // Make sure BYTE filename[] above is large enough for your longest name
     MPFSGetFilename(curHTTP.file, name, 20);
 	
-// Make sure it's the products.htm page
-    if(strcmppgm2ram((char*)name, (ROM char*)"products.htm") != 0)
+// Make sure it's the index.htm page
+    if(strcmppgm2ram((char*)name, (ROM char*)"index.htm") != 0)
         return HTTP_IO_DONE;
 		
 // Loop while data remains
@@ -197,39 +199,16 @@ HTTP_IO_RESULT HTTPExecutePost(void)
         curHTTP.byteCount -= len;
 		
 // Figure out which variable it is
-        if(memcmppgm2ram(curHTTP.data, (void*)"name", 4) == 0)
-        {// A name was found
+        if(memcmppgm2ram(curHTTP.data, (void*)"temp", 4) == 0)
+        {// A temperature was found
             item = curHTTP.data[5] - '0';
-            if(item > MAX_PRODUCTS)
+            if(item > MAX_TEMP_POINTS)
                 continue;
-            memcpy((void*)temp_points[item].name, (void*)&curHTTP.data[8], 10);
-        }
-        else if(memcmppgm2ram(curHTTP.data, (void*)"price", 5) == 0)
-        {// A price was found
-            item = curHTTP.data[6] - '0';
-            if(item > MAX_PRODUCTS)
-                continue;
-            ptr = curHTTP.data + 9;
-
-// Skip the $ if entered
-            if(*ptr == '$')
-                ptr++;
-
-// Read the dollars value
-            temp_points[item].temp = (*ptr++ - '0') * 4;
-			
-// Read in the cents value
-            if(strcmppgm2ram((char*)ptr, (ROM char*)".87") > 0)
-                temp_points[item].temp += 4;
-            else if(strcmppgm2ram((char*)ptr, (ROM char*)".62") > 0)
-                temp_points[item].temp += 3;
-                else if(strcmppgm2ram((char*)ptr, (ROM char*)".37") > 0)
-                    temp_points[item].temp += 2;
-                    else if(strcmppgm2ram((char*)ptr, (ROM char*)".12") > 0)
-                        temp_points[item].temp += 1;
-// Make sure price isn't over the max
-			if(temp_points[item].temp > 20)
-                            temp_points[item].temp = 20;
+            memcpy((void*)temp_str, (void*)&curHTTP.data[8], 10);
+            temp = atof(temp_str);
+            temp_points[item].temp = temp;
+            ptr = curHTTP.data + 8;
+            ptr++;
         }
     }
 // Update the LCD and AppConfig
@@ -304,20 +283,20 @@ void HTTPPrint_name(WORD item)
 /********************************************************************/
 void HTTPPrint_stock(WORD item)
 {
-BYTE digits[4];
+//BYTE digits[4];
 
-    sprintf((char *) digits,"%d",temp_points[item].stock);
-//uintoa(Products[item].stock, digits);
-    TCPPutString(sktHTTP, digits);
+//    sprintf((char *) digits,"%d",temp_points[item].stock);
+////uintoa(Products[item].stock, digits);
+//    TCPPutString(sktHTTP, digits);
 }
 
 /********************************************************************/
 void HTTPPrint_status(WORD item)
 {
-    if(temp_points[item].stock < 10)
-        TCPPutString(sktHTTP, (BYTE *) "low");
-    else
-        TCPPutString(sktHTTP, (BYTE *) "ok");
+//    if(temp_points[item].stock < 10)
+//        TCPPutString(sktHTTP, (BYTE *) "low");
+//    else
+//        TCPPutString(sktHTTP, (BYTE *) "ok");
 }
 
 void HTTPPrint_lights_chk(WORD on)

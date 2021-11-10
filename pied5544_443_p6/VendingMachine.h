@@ -30,14 +30,12 @@
 	#include "TCPIP Stack/TCPIP.h"
 
 // Application Specific Global Variables
-	#define MAX_PRODUCTS		2u
+	#define MAX_TEMP_POINTS		2u
 
 	typedef struct
 	{
 		BYTE name[11];
-		BYTE stock;
 		float temp;
-	//  BYTE refill;
 	} TEMP_ITEM;
 
 	void VendSetLights(BOOL setOn);
