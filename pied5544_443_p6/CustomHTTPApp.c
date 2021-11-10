@@ -207,8 +207,6 @@ HTTP_IO_RESULT HTTPExecutePost(void)
             memcpy((void*)temp_str, (void*)&curHTTP.data[8], 10);
             temp = atof(temp_str);
             temp_points[item].temp = temp;
-            ptr = curHTTP.data + 8;
-            ptr++;
         }
     }
 // Update the LCD and AppConfig
