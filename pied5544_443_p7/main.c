@@ -228,19 +228,60 @@ static void prvServerConnectionInstance( void *pvParameters )
 	static const TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 5000 );
 	static const TickType_t xSendTimeOut = pdMS_TO_TICKS( 5000 );
 	TickType_t xTimeOnShutdown;
+    
+    int i;
+    int j = 1;
+    
+    unsigned int buf_size = 8;
+    unsigned int src_buf[buf_size];
+    unsigned int dest_buf[buf_size];
+    DmaTxferRes res;
+    
+    DmaChnOpen(3, DMA_CHN_PRI2, DMA_OPEN_DEFAULT);
+    DmaChnSetTxfer(3, src_buf, dest_buf, buf_size*sizeof(unsigned int),
+                   buf_size*sizeof(unsigned int), buf_size*sizeof(unsigned int));
 
 	xConnectedSocket = ( Socket_t ) pvParameters;
 	FreeRTOS_setsockopt( xConnectedSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
 	FreeRTOS_setsockopt( xConnectedSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof( xReceiveTimeOut ) );
     
-    sprintf (cReceivedString, "%08lX\r\n", 12345678);
-    lBytes = strlen(cReceivedString);
+//    sprintf (cReceivedString, "%08lX\r\n", 12345678);
+//    lBytes = strlen(cReceivedString);
 
 	for( ;; )
 	{
 		vTaskDelay(3000/portTICK_PERIOD_MS);
         
         LATBSET = LEDA;
+        LATBCLR = LEDB;
+        LATBCLR = LEDC;
+        
+        for (i = 0; i < buf_size; i++)
+        {
+            src_buf[i] = i * j;
+        }
+        
+        res = DmaChnStartTxfer(3, DMA_WAIT_BLOCK, 0);
+        
+        if (res == DMA_TXFER_OK)
+        {
+            LATBSET = LEDB;
+        }
+        else
+        {
+            LATBSET = LEDC;
+        }
+        
+        sprintf(cReceivedString, "%u ", dest_buf[0]);
+        
+        for (i = 1; i < buf_size; i++)
+        {
+            sprintf(cReceivedString+strlen(cReceivedString), "%u ", dest_buf[i]);
+        }
+        
+        sprintf(cReceivedString+strlen(cReceivedString), "\r\n", dest_buf[i]);
+        
+        lBytes = strlen(cReceivedString) + 1;
                 
                 /* Zero out the receive array so there is NULL at the end of the string
 		 * when it is printed out. */
@@ -276,6 +317,7 @@ static void prvServerConnectionInstance( void *pvParameters )
 		}
                 
         LATBCLR = LEDA;
+        j++;
 	} // for(;;)
 	
 	/* Initiate a shutdown in case it has not already been initiated. */
