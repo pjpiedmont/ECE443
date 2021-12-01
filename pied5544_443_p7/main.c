@@ -31,6 +31,17 @@
 
 #define tcpechoSHUTDOWN_DELAY	( pdMS_TO_TICKS( 5000 ) )
 
+#define BUF_LEN     8
+#define DMA_PERIOD  5000
+
+unsigned int dest_buf[BUF_LEN];
+
+static void dmaFillBufs(void* pvParameters);
+void __attribute__( (interrupt(ipl1),
+                     vector(_DMA3_VECTOR))) DMAInterruptHandler(void);
+
+SemaphoreHandle_t sendTCP;
+
 /* Set up the processor for the example program. */
 static void prvSetupHardware( void );
 
@@ -68,11 +79,14 @@ int main( void )
                      ucGatewayAddress,
                      ucDNSServerAddress,
                      ucMACAddress );
+    
+    sendTCP = xSemaphoreCreateBinary();
 
     /*
      * Our RTOS tasks can be created here.
      */
     xTaskCreate( vCreateTCPServerSocket, "TCP1", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
+    xTaskCreate(dmaFillBufs, "DMA", configMINIMAL_STACK_SIZE, NULL, 1, NULL );
    
     /* Start the RTOS scheduler. */
     vTaskStartScheduler();
@@ -105,6 +119,11 @@ static void prvSetupHardware( void )
     
     PORTSetPinsDigitalOut(IOPORT_B, SM_LEDS);
     LATBCLR = SM_LEDS;
+    
+    DmaChnOpen(3, DMA_CHN_PRI2, DMA_OPEN_DEFAULT);
+    DmaChnSetEvEnableFlags(3, DMA_EV_CELL_DONE);
+    mDmaChnIntEnable(3);
+    mDmaChnSetIntPriority(3, 1, 1);
     
     /* Enable multi-vector interrupts */
     INTConfigureSystem(INT_SYSTEM_CONFIG_MULT_VECTOR);  /* Do only once */
@@ -144,6 +163,50 @@ void _general_exception_handler( unsigned long ulCause, unsigned long ulStatus )
 {
     for( ;; );
 } /* End of _general_exception_handler */
+
+static void dmaFillBufs(void* pvParameters)
+{
+    unsigned int src_buf[BUF_LEN];
+//    unsigned int dest_buf[BUF_LEN];
+    
+    unsigned int buf_size = BUF_LEN * sizeof(unsigned int);
+    
+    unsigned int i;
+    unsigned int j = 1;
+    
+    DmaChnSetTxfer(3, src_buf, dest_buf, buf_size, buf_size, buf_size);
+    
+    while (1)
+    {
+        vTaskDelay(DMA_PERIOD / portTICK_PERIOD_MS);
+        
+        LATBCLR = LEDB;
+        LATBCLR = LEDC;
+        
+        for (i = 0; i < BUF_LEN; i++)
+        {
+            src_buf[i] = i * j;
+        }
+        
+        DmaChnStartTxfer(3, DMA_WAIT_NOT, 0);
+        j++;
+    }
+}
+
+void DMAInterruptHandler(void)
+{
+    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
+    int flags = DmaChnGetEvFlags(3);
+    
+    if (flags & DMA_EV_CELL_DONE)
+    {
+        LATBINV = LEDD;
+        xSemaphoreGiveFromISR(sendTCP, &xHigherPriorityTaskWoken);
+    }
+    
+    DmaChnClrEvFlags(3, DMA_EV_ALL_EVNTS);
+    DmaChnClrIntFlag(3);
+}
 
 /* vCreateTCPServerSocket Function Description *************************
  * SYNTAX:          static void vCreateTCPServerSocket( void *pvParameters );
@@ -230,51 +293,22 @@ static void prvServerConnectionInstance( void *pvParameters )
 	TickType_t xTimeOnShutdown;
     
     int i;
-    int j = 1;
-    
-    unsigned int buf_size = 8;
-    unsigned int src_buf[buf_size];
-    unsigned int dest_buf[buf_size];
-    DmaTxferRes res;
-    
-    DmaChnOpen(3, DMA_CHN_PRI2, DMA_OPEN_DEFAULT);
-    DmaChnSetTxfer(3, src_buf, dest_buf, buf_size*sizeof(unsigned int),
-                   buf_size*sizeof(unsigned int), buf_size*sizeof(unsigned int));
+//    unsigned int dest_buf[BUF_LEN] = {0, 1, 2, 3, 4, 5, 6, 7};
 
 	xConnectedSocket = ( Socket_t ) pvParameters;
 	FreeRTOS_setsockopt( xConnectedSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
 	FreeRTOS_setsockopt( xConnectedSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof( xReceiveTimeOut ) );
     
-//    sprintf (cReceivedString, "%08lX\r\n", 12345678);
-//    lBytes = strlen(cReceivedString);
+    xSemaphoreTake(sendTCP, 0);
 
 	for( ;; )
 	{
-		vTaskDelay(3000/portTICK_PERIOD_MS);
-        
+		xSemaphoreTake(sendTCP, portMAX_DELAY);
         LATBSET = LEDA;
-        LATBCLR = LEDB;
-        LATBCLR = LEDC;
-        
-        for (i = 0; i < buf_size; i++)
-        {
-            src_buf[i] = i * j;
-        }
-        
-        res = DmaChnStartTxfer(3, DMA_WAIT_BLOCK, 0);
-        
-        if (res == DMA_TXFER_OK)
-        {
-            LATBSET = LEDB;
-        }
-        else
-        {
-            LATBSET = LEDC;
-        }
         
         sprintf(cReceivedString, "%u ", dest_buf[0]);
         
-        for (i = 1; i < buf_size; i++)
+        for (i = 1; i < BUF_LEN; i++)
         {
             sprintf(cReceivedString+strlen(cReceivedString), "%u ", dest_buf[i]);
         }
@@ -282,15 +316,6 @@ static void prvServerConnectionInstance( void *pvParameters )
         sprintf(cReceivedString+strlen(cReceivedString), "\r\n", dest_buf[i]);
         
         lBytes = strlen(cReceivedString) + 1;
-                
-                /* Zero out the receive array so there is NULL at the end of the string
-		 * when it is printed out. */
-//		memset( cReceivedString, 0x00, sizeof( cReceivedString ) );
-//                
-//                sprintf (cReceivedString, "%08lX\r\n", ReadCoreTimer());
-//                lBytes = strlen(cReceivedString) + 1; // include NULL
-        
-//        lBytes = 1;
 
 		/* If Send the string. */
 		if( lBytes >= 0 )
@@ -315,9 +340,8 @@ static void prvServerConnectionInstance( void *pvParameters )
 			/* Socket closed? */
 			break;
 		}
-                
+        
         LATBCLR = LEDA;
-        j++;
 	} // for(;;)
 	
 	/* Initiate a shutdown in case it has not already been initiated. */
