@@ -32,6 +32,7 @@
 #define tcpechoSHUTDOWN_DELAY	( pdMS_TO_TICKS( 5000 ) )
 
 #define BUF_LEN     8
+static const unsigned int buf_size = BUF_LEN * sizeof(unsigned int);
 
 void configDMA(void);
 static void dmaFillBufs(void* pvParameters);
@@ -141,29 +142,28 @@ void configDMA(void)
     mDmaChnIntEnable(3);
     mDmaChnSetIntPriority(3, 2, 1);
     
-    unsigned int buf_size = BUF_LEN * sizeof(unsigned int);
     DmaChnSetTxfer(3, src_buf, dest_buf, buf_size, buf_size, buf_size);
-//    DmaChnDisable(3);
+    DmaChnDisable(3);
 }
 
 void configADC(void)
 {
     CloseADC10();
     
-    unsigned int config1 = ADC_MODULE_ON | ADC_FORMAT_INTG16 | ADC_CLK_AUTO |
+    unsigned int config1 = ADC_MODULE_OFF | ADC_FORMAT_INTG16 | ADC_CLK_AUTO |
                            ADC_AUTO_SAMPLING_ON;
     unsigned int config2 = ADC_VREF_AVDD_AVSS | ADC_OFFSET_CAL_DISABLE |
                            ADC_SCAN_OFF | ADC_SAMPLES_PER_INT_8 |
                            ADC_ALT_BUF_ON | ADC_ALT_INPUT_OFF;
     unsigned int config3 = ADC_CONV_CLK_PB | ADC_SAMPLE_TIME_12 |
-                           ADC_CONV_CLK_25Tcy;
+                           ADC_CONV_CLK_26Tcy;
     unsigned int configport = ENABLE_AN2_ANA;
     unsigned int configscan = SKIP_SCAN_ALL;
     
     SetChanADC10(ADC_CH0_POS_SAMPLEA_AN2 | ADC_CH0_NEG_SAMPLEA_NVREF);
     OpenADC10(config1, config2, config3, configport, configscan);
     ConfigIntADC10(ADC_INT_ON | ADC_INT_PRI_1 | ADC_INT_SUB_PRI_1);
-//    CloseADC10();
+    mAD1IntEnable(0);
 }
 
 /* vApplicationStackOver Function Description **********************************
@@ -215,7 +215,6 @@ void DMAInterruptHandler(void)
     
     if (flags & DMA_EV_CELL_DONE)
     {
-        LATBINV = LEDD;
         xSemaphoreGiveFromISR(sendTCP, &xHigherPriorityTaskWoken);
     }
     
@@ -225,6 +224,8 @@ void DMAInterruptHandler(void)
 
 void ADCInterruptHandler(void)
 {
+    mAD1IntEnable(0);
+    
     unsigned int buf0;
     unsigned int active_buf = ReadActiveBufferADC10();
     
@@ -342,7 +343,6 @@ static void prvServerConnectionInstance( void *pvParameters )
 	TickType_t xTimeOnShutdown;
     
     int i;
-//    unsigned int dest_buf[BUF_LEN] = {0, 1, 2, 3, 4, 5, 6, 7};
 
 	xConnectedSocket = ( Socket_t ) pvParameters;
 	FreeRTOS_setsockopt( xConnectedSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
@@ -350,22 +350,21 @@ static void prvServerConnectionInstance( void *pvParameters )
     
     xSemaphoreTake(sendTCP, 0);
     
-//    DmaChnEnable(3);
-//    ConfigIntADC10(ADC_INT_ON);
-//    EnableADC10();
+    DmaChnEnable(3);
+    mAD1IntEnable(1);
+    EnableADC10();
 
 	for( ;; )
 	{
 		xSemaphoreTake(sendTCP, portMAX_DELAY);
+        mAD1IntEnable(1);
         
-        sprintf(cReceivedString, "%u, ", dest_buf[0]);
+        sprintf(cReceivedString, "%u,\r\n", dest_buf[0]);
         
         for (i = 1; i < BUF_LEN; i++)
         {
-            sprintf(cReceivedString+strlen(cReceivedString), "%u, ", dest_buf[i]);
+            sprintf(cReceivedString+strlen(cReceivedString), "%u,\r\n", dest_buf[i]);
         }
-        
-        sprintf(cReceivedString+strlen(cReceivedString), "\r\n", dest_buf[i]);
         
         lBytes = strlen(cReceivedString) + 1;
 
@@ -393,6 +392,8 @@ static void prvServerConnectionInstance( void *pvParameters )
 			break;
 		}
 	} // for(;;)
+    
+    mAD1IntEnable(0);
 	
 	/* Initiate a shutdown in case it has not already been initiated. */
 	FreeRTOS_shutdown( xConnectedSocket, FREERTOS_SHUT_RDWR );
