@@ -32,13 +32,14 @@
 #define tcpechoSHUTDOWN_DELAY	( pdMS_TO_TICKS( 5000 ) )
 
 #define BUF_LEN     8
-#define DMA_PERIOD  5000
 
-unsigned int dest_buf[BUF_LEN];
-
+void configDMA(void);
 static void dmaFillBufs(void* pvParameters);
-void __attribute__( (interrupt(ipl1),
+void __attribute__( (interrupt(ipl2),
                      vector(_DMA3_VECTOR))) DMAInterruptHandler(void);
+
+unsigned int src_buf[BUF_LEN];
+unsigned int dest_buf[BUF_LEN];
 
 void configADC(void);
 void __attribute__( (interrupt(ipl1),
@@ -90,7 +91,7 @@ int main( void )
      * Our RTOS tasks can be created here.
      */
     xTaskCreate( vCreateTCPServerSocket, "TCP1", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
-    xTaskCreate(dmaFillBufs, "DMA", configMINIMAL_STACK_SIZE, NULL, 1, NULL );
+//    xTaskCreate(dmaFillBufs, "DMA", configMINIMAL_STACK_SIZE, NULL, 1, NULL );
    
     /* Start the RTOS scheduler. */
     vTaskStartScheduler();
@@ -124,11 +125,7 @@ static void prvSetupHardware( void )
     PORTSetPinsDigitalOut(IOPORT_G, BRD_LEDS);
     LATGCLR = BRD_LEDS;
     
-    DmaChnOpen(3, DMA_CHN_PRI2, DMA_OPEN_DEFAULT);
-    DmaChnSetEvEnableFlags(3, DMA_EV_CELL_DONE);
-    mDmaChnIntEnable(3);
-    mDmaChnSetIntPriority(3, 1, 1);
-    
+    configDMA();    
     configADC();
     
     /* Enable multi-vector interrupts */
@@ -136,6 +133,18 @@ static void prvSetupHardware( void )
     INTEnableInterrupts();   /* Do as needed for global interrupt control */
     portDISABLE_INTERRUPTS();
 } /* End of prvSetupHardware */
+
+void configDMA(void)
+{
+    DmaChnOpen(3, DMA_CHN_PRI2, DMA_OPEN_DEFAULT);
+    DmaChnSetEvEnableFlags(3, DMA_EV_CELL_DONE);
+    mDmaChnIntEnable(3);
+    mDmaChnSetIntPriority(3, 2, 1);
+    
+    unsigned int buf_size = BUF_LEN * sizeof(unsigned int);
+    DmaChnSetTxfer(3, src_buf, dest_buf, buf_size, buf_size, buf_size);
+//    DmaChnDisable(3);
+}
 
 void configADC(void)
 {
@@ -146,7 +155,7 @@ void configADC(void)
     unsigned int config2 = ADC_VREF_AVDD_AVSS | ADC_OFFSET_CAL_DISABLE |
                            ADC_SCAN_OFF | ADC_SAMPLES_PER_INT_8 |
                            ADC_ALT_BUF_ON | ADC_ALT_INPUT_OFF;
-    unsigned int config3 = ADC_CONV_CLK_INTERNAL_RC | ADC_SAMPLE_TIME_15 |
+    unsigned int config3 = ADC_CONV_CLK_PB | ADC_SAMPLE_TIME_12 |
                            ADC_CONV_CLK_25Tcy;
     unsigned int configport = ENABLE_AN2_ANA;
     unsigned int configscan = SKIP_SCAN_ALL;
@@ -154,7 +163,7 @@ void configADC(void)
     SetChanADC10(ADC_CH0_POS_SAMPLEA_AN2 | ADC_CH0_NEG_SAMPLEA_NVREF);
     OpenADC10(config1, config2, config3, configport, configscan);
     ConfigIntADC10(ADC_INT_ON | ADC_INT_PRI_1 | ADC_INT_SUB_PRI_1);
-    EnableADC10();
+//    CloseADC10();
 }
 
 /* vApplicationStackOver Function Description **********************************
@@ -191,31 +200,11 @@ void _general_exception_handler( unsigned long ulCause, unsigned long ulStatus )
 } /* End of _general_exception_handler */
 
 static void dmaFillBufs(void* pvParameters)
-{
-    unsigned int src_buf[BUF_LEN];
-//    unsigned int dest_buf[BUF_LEN];
-    
-    unsigned int buf_size = BUF_LEN * sizeof(unsigned int);
-    
-    unsigned int i;
-    unsigned int j = 1;
-    
-    DmaChnSetTxfer(3, src_buf, dest_buf, buf_size, buf_size, buf_size);
-    
+{    
     while (1)
     {
-        vTaskDelay(DMA_PERIOD / portTICK_PERIOD_MS);
-        
-//        LATBCLR = LEDB;
-//        LATBCLR = LEDC;
-        
-        for (i = 0; i < BUF_LEN; i++)
-        {
-            src_buf[i] = i * j;
-        }
-        
-        DmaChnStartTxfer(3, DMA_WAIT_NOT, 0);
-        j++;
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        PORTGINV = LED1;
     }
 }
 
@@ -236,6 +225,35 @@ void DMAInterruptHandler(void)
 
 void ADCInterruptHandler(void)
 {
+    unsigned int buf0;
+    unsigned int active_buf = ReadActiveBufferADC10();
+    
+    if (active_buf)
+    {
+        src_buf[0] = ADC1BUF8;
+        src_buf[1] = ADC1BUF9;
+        src_buf[2] = ADC1BUFA;
+        src_buf[3] = ADC1BUFB;
+        src_buf[4] = ADC1BUFC;
+        src_buf[5] = ADC1BUFD;
+        src_buf[6] = ADC1BUFE;
+        src_buf[7] = ADC1BUFF;
+    }
+    else
+    {
+        src_buf[0] = ADC1BUF0;
+        src_buf[1] = ADC1BUF1;
+        src_buf[2] = ADC1BUF2;
+        src_buf[3] = ADC1BUF3;
+        src_buf[4] = ADC1BUF4;
+        src_buf[5] = ADC1BUF5;
+        src_buf[6] = ADC1BUF6;
+        src_buf[7] = ADC1BUF7;
+    }
+    
+    buf0 = src_buf[0];
+    PORTGINV = LED2;
+    DmaChnStartTxfer(3, DMA_WAIT_NOT, 0);
     mAD1ClearIntFlag();
 }
 
@@ -331,17 +349,20 @@ static void prvServerConnectionInstance( void *pvParameters )
 	FreeRTOS_setsockopt( xConnectedSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof( xReceiveTimeOut ) );
     
     xSemaphoreTake(sendTCP, 0);
+    
+//    DmaChnEnable(3);
+//    ConfigIntADC10(ADC_INT_ON);
+//    EnableADC10();
 
 	for( ;; )
 	{
 		xSemaphoreTake(sendTCP, portMAX_DELAY);
-        LATBSET = LEDA;
         
-        sprintf(cReceivedString, "%u ", dest_buf[0]);
+        sprintf(cReceivedString, "%u, ", dest_buf[0]);
         
         for (i = 1; i < BUF_LEN; i++)
         {
-            sprintf(cReceivedString+strlen(cReceivedString), "%u ", dest_buf[i]);
+            sprintf(cReceivedString+strlen(cReceivedString), "%u, ", dest_buf[i]);
         }
         
         sprintf(cReceivedString+strlen(cReceivedString), "\r\n", dest_buf[i]);
@@ -371,8 +392,6 @@ static void prvServerConnectionInstance( void *pvParameters )
 			/* Socket closed? */
 			break;
 		}
-        
-        LATBCLR = LEDA;
 	} // for(;;)
 	
 	/* Initiate a shutdown in case it has not already been initiated. */
